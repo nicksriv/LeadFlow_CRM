@@ -40,6 +40,7 @@ export interface IStorage {
   // Leads
   getLeads(): Promise<Lead[]>;
   getLead(id: string): Promise<Lead | undefined>;
+  getLeadsByOwner(ownerId: string): Promise<Lead[]>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<void>;
@@ -71,6 +72,8 @@ export interface IStorage {
   // Users
   getUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
+  getUsersByRole(role: string): Promise<User[]>;
+  getUsersByManager(managerId: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
 
@@ -123,6 +126,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLead(id: string): Promise<void> {
     await db.delete(leads).where(eq(leads.id, id));
+  }
+
+  async getLeadsByOwner(ownerId: string): Promise<Lead[]> {
+    return db.select().from(leads).where(eq(leads.ownerId, ownerId)).orderBy(desc(leads.createdAt));
   }
 
   async getConversations(): Promise<Conversation[]> {
@@ -242,6 +249,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
+  }
+
+  async getUsersByRole(role: string): Promise<User[]> {
+    return db.select().from(users).where(eq(users.role, role));
+  }
+
+  async getUsersByManager(managerId: string): Promise<User[]> {
+    return db.select().from(users).where(eq(users.managerId, managerId));
   }
 
   async getAssignmentRules(): Promise<AssignmentRule[]> {

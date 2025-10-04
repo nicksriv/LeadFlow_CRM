@@ -17,6 +17,7 @@ export const leads = pgTable("leads", {
   position: text("position"),
   status: text("status").notNull().default("cold"), // cold, warm, hot
   score: integer("score").notNull().default(0), // 0-100
+  ownerId: varchar("owner_id").references(() => users.id), // Lead owner/assigned sales rep
   lastContactedAt: timestamp("last_contacted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -88,6 +89,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   role: text("role").notNull().default("sales_rep"), // admin, sales_manager, sales_rep
+  managerId: varchar("manager_id").references(() => users.id), // Reporting manager for hierarchy
   isActive: integer("is_active").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -138,10 +140,14 @@ export const scoringConfig = pgTable("scoring_config", {
 });
 
 // Define relations
-export const leadsRelations = relations(leads, ({ many }) => ({
+export const leadsRelations = relations(leads, ({ many, one }) => ({
   conversations: many(conversations),
   scores: many(leadScores),
   activities: many(activities),
+  owner: one(users, {
+    fields: [leads.ownerId],
+    references: [users.id],
+  }),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one }) => ({
@@ -174,6 +180,19 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
     fields: [tasks.assignedToUserId],
     references: [users.id],
   }),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  manager: one(users, {
+    fields: [users.managerId],
+    references: [users.id],
+    relationName: "managerToSubordinates",
+  }),
+  subordinates: many(users, {
+    relationName: "managerToSubordinates",
+  }),
+  ownedLeads: many(leads),
+  assignedTasks: many(tasks),
 }));
 
 export const leadAssignmentsRelations = relations(leadAssignments, ({ one }) => ({

@@ -385,6 +385,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/users/role/:role", async (req, res) => {
+    try {
+      const users = await storage.getUsersByRole(req.params.role);
+      res.json(users);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/users/:id/subordinates", async (req, res) => {
+    try {
+      const subordinates = await storage.getUsersByManager(req.params.id);
+      res.json(subordinates);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/users", async (req, res) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
@@ -392,6 +422,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(user);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/users/:id", async (req, res) => {
+    try {
+      const validatedData = insertUserSchema.partial().parse(req.body);
+      const user = await storage.updateUser(req.params.id, validatedData);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Lead ownership routes
+  app.get("/api/leads/owner/:ownerId", async (req, res) => {
+    try {
+      const leads = await storage.getLeadsByOwner(req.params.ownerId);
+      res.json(leads);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
