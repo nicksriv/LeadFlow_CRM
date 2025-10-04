@@ -6,6 +6,9 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 ## Features
 - **Lead Management**: Complete CRUD operations for managing leads with detailed information
 - **Pipeline/Deal Management**: Full-featured Kanban board for managing sales pipeline with drag-and-drop
+- **Lead-to-Deal Conversion**: One-click conversion of qualified leads to deals with automatic linking
+- **Deal Creation**: Create new deals directly from pipeline with comprehensive form validation
+- **Revenue Forecasting**: Weighted pipeline value calculations with monthly breakdown and projections
 - **AI-Powered Scoring**: Automatic lead scoring (0-100) using OpenAI to analyze email conversations
 - **Status Classification**: Intelligent categorization into Cold (0-33), Warm (34-66), and Hot (67-100) leads
 - **Email Sending**: Send emails directly from CRM with email template support
@@ -15,7 +18,7 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 - **Task Management**: Create tasks and follow-up reminders for each lead
 - **Activity Timeline**: Comprehensive activity log for all lead and deal interactions
 - **Advanced Scoring Configuration**: Customizable weighted criteria for AI scoring algorithm
-- **Analytics Dashboard**: Insights into lead pipeline performance and conversion metrics
+- **Analytics Dashboard**: Insights into lead pipeline performance, conversion metrics, and revenue forecasting
 - **Dark Mode**: Full dark mode support throughout the application
 
 ## Architecture
@@ -26,6 +29,27 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 - **Styling**: Tailwind CSS with Shadcn UI components
 
 ## Recent Changes
+- **October 2024**: Pipeline/Deal Management Enhancements
+  - Lead-to-Deal Conversion
+    - Convert to Deal button in lead detail page
+    - Pre-filled conversion form with lead context
+    - Automatic deal linking via leadId field
+    - Redirect to new deal detail page on successful conversion
+  - New Deal Creation
+    - "New Deal" button in pipeline page
+    - Full deal creation dialog with validation
+    - Auto-fills current pipeline and first stage
+    - Immediate cache refresh for pipeline view
+  - Revenue Forecasting
+    - Enhanced /api/forecast endpoint with monthly breakdown
+    - Weighted revenue calculations (amount × probability)
+    - Analytics dashboard integration with 4 new forecast stat cards
+    - Monthly revenue visualization with progress bars
+    - Shows next 6 months of expected revenue
+  - Date Handling Improvements
+    - ISO date string coercion in insertDealSchema
+    - Proper Date object transformation for API requests
+    - Consistent date validation across conversion and creation flows
 - **January 2025**: UI/UX Enhancement and Navigation Improvements
   - Visual overhaul with vibrant colors and modern design
     - Colorful stat cards with gradient backgrounds and icon containers
