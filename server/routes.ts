@@ -272,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateSyncState({
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        tokenExpiry: new Date(Date.now() + tokens.expiresIn * 1000),
+        expiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
         isConfigured: 1,
       });
 
@@ -305,10 +305,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle webhook notification
       const notification = req.body.value?.[0];
       if (notification) {
-        const syncState = await storage.getSyncState();
-        if (syncState?.accessToken) {
-          await ms365Integration.handleWebhookNotification(notification, syncState.accessToken);
-        }
+        // Ensure valid token before processing webhook
+        const accessToken = await ms365Integration.ensureValidToken();
+        await ms365Integration.handleWebhookNotification(notification, accessToken);
       }
 
       res.status(202).send();
@@ -403,11 +402,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Ensure valid token before sending email
+      const accessToken = await ms365Integration.ensureValidToken();
+      
       const emailResult = await ms365Integration.sendEmail({
         to: lead.email,
         subject,
         body,
-        accessToken: syncState.accessToken,
+        accessToken,
       });
 
       if (!emailResult.success) {

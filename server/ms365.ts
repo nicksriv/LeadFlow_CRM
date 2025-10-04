@@ -113,7 +113,11 @@ export class MS365Integration {
   /**
    * Refresh expired access token using refresh token
    */
-  async refreshAccessToken(refreshToken: string): Promise<string> {
+  async refreshAccessToken(refreshToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  }> {
     const tokenUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/token`;
     
     const params = new URLSearchParams({
@@ -139,7 +143,14 @@ export class MS365Integration {
       }
 
       const data = await response.json();
-      return data.access_token;
+      
+      console.log("MS365: Access token refreshed successfully");
+      
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || refreshToken,
+        expiresIn: data.expires_in,
+      };
     } catch (error) {
       console.error("MS365: Token refresh failed:", error);
       throw error;
@@ -147,14 +158,64 @@ export class MS365Integration {
   }
 
   /**
+   * Ensure valid access token (refresh if expired)
+   * 
+   * If refresh fails (e.g., revoked token), clears sync state
+   * to prompt user reconnection
+   */
+  async ensureValidToken(): Promise<string> {
+    const syncState = await storage.getSyncState();
+    if (!syncState || syncState.isConfigured !== 1) {
+      throw new Error("MS 365 not configured");
+    }
+
+    const now = new Date();
+    const tokenExpiry = syncState.expiresAt ? new Date(syncState.expiresAt) : null;
+
+    // Check if token is expired or will expire in next 5 minutes
+    const needsRefresh = !tokenExpiry || tokenExpiry.getTime() - now.getTime() < 5 * 60 * 1000;
+
+    if (needsRefresh && syncState.refreshToken) {
+      console.log("MS365: Access token expired or expiring soon, refreshing...");
+      
+      try {
+        const tokens = await this.refreshAccessToken(syncState.refreshToken);
+        
+        // Update stored tokens
+        await storage.updateSyncState({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+        });
+
+        return tokens.accessToken;
+      } catch (error) {
+        // Refresh failed - clear sync state to prompt reconnection
+        console.error("MS365: Token refresh failed, clearing integration", error);
+        await storage.updateSyncState({
+          accessToken: null,
+          refreshToken: null,
+          expiresAt: null,
+          isConfigured: 0,
+        });
+        throw new Error("MS 365 authentication expired. Please reconnect in Settings.");
+      }
+    }
+
+    return syncState.accessToken || "";
+  }
+
+  /**
    * Fetch emails from MS 365 mailbox
    * 
    * Uses Microsoft Graph API: GET /me/messages
    * Supports delta queries for incremental sync
+   * Handles 401 errors with automatic token refresh and retry
    */
   async fetchEmails(
     accessToken: string,
-    deltaToken?: string
+    deltaToken?: string,
+    isRetry: boolean = false
   ): Promise<{
     emails: EmailMessage[];
     nextDeltaToken: string;
@@ -169,6 +230,13 @@ export class MS365Integration {
           "Content-Type": "application/json",
         },
       });
+
+      // Handle 401 Unauthorized - token may be invalid
+      if (response.status === 401 && !isRetry) {
+        console.log("MS365: Received 401, refreshing token and retrying...");
+        const newAccessToken = await this.ensureValidToken();
+        return this.fetchEmails(newAccessToken, deltaToken, true);
+      }
 
       if (!response.ok) {
         const error = await response.text();
@@ -221,14 +289,8 @@ export class MS365Integration {
         throw new Error("MS 365 not configured");
       }
 
-      // In production:
-      // 1. Get access token (refresh if expired)
-      // 2. Fetch emails using delta token for incremental sync
-      // 3. For each email, find matching lead by email address
-      // 4. Create conversation record
-      // 5. Update last sync time and delta token
-
-      const accessToken = syncState.accessToken || "";
+      // Ensure we have a valid access token (refresh if expired)
+      const accessToken = await this.ensureValidToken();
       const deltaToken = syncState.deltaToken || undefined;
 
       const { emails, nextDeltaToken } = await this.fetchEmails(
@@ -340,6 +402,7 @@ export class MS365Integration {
     subject: string;
     body: string;
     accessToken: string;
+    isRetry?: boolean;
   }): Promise<{ success: boolean; messageId?: string }> {
     const url = "https://graph.microsoft.com/v1.0/me/sendMail";
     
@@ -371,6 +434,17 @@ export class MS365Integration {
         body: JSON.stringify(payload),
       });
 
+      // Handle 401 Unauthorized - token may be invalid
+      if (response.status === 401 && !params.isRetry) {
+        console.log("MS365: Received 401, refreshing token and retrying...");
+        const newAccessToken = await this.ensureValidToken();
+        return this.sendEmail({
+          ...params,
+          accessToken: newAccessToken,
+          isRetry: true,
+        });
+      }
+
       if (!response.ok) {
         const error = await response.text();
         throw new Error(`Failed to send email: ${error}`);
@@ -389,7 +463,7 @@ export class MS365Integration {
   /**
    * Handle webhook notification from MS 365
    */
-  async handleWebhookNotification(notification: any, accessToken: string): Promise<void> {
+  async handleWebhookNotification(notification: any, accessToken: string, isRetry: boolean = false): Promise<void> {
     console.log("MS365: Received webhook notification", notification);
     
     // Validate clientState matches what we sent
@@ -417,6 +491,13 @@ export class MS365Integration {
           "Content-Type": "application/json",
         },
       });
+
+      // Handle 401 Unauthorized - token may be invalid
+      if (response.status === 401 && !isRetry) {
+        console.log("MS365: Received 401, refreshing token and retrying...");
+        const newAccessToken = await this.ensureValidToken();
+        return this.handleWebhookNotification(notification, newAccessToken, true);
+      }
 
       if (!response.ok) {
         throw new Error("Failed to fetch message details");

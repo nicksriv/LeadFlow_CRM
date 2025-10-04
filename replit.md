@@ -29,6 +29,29 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 - **Styling**: Tailwind CSS with Shadcn UI components
 
 ## Recent Changes
+- **October 2024**: MS 365 Integration - Production Implementation
+  - Completed full OAuth 2.0 authentication flow with Microsoft Graph API
+    - Token exchange endpoint with authorization code grant
+    - Automatic token refresh with 5-minute expiry buffer
+    - Token persistence in database (accessToken, refreshToken, expiresAt)
+  - Email operations via Microsoft Graph API
+    - Email fetching with delta queries for incremental sync
+    - Email sending with HTML content support
+    - Webhook subscriptions for real-time notifications
+  - Token lifecycle management
+    - ensureValidToken() checks expiry before all Graph API calls
+    - Automatic refresh when token expires or within 5 minutes of expiry
+    - Updated tokens stored in sync_state table
+    - All operations (sync, send, webhook) use token refresh
+  - Webhook integration
+    - Subscription creation with 3-day expiration
+    - Validation token handling for Microsoft verification
+    - Real-time email processing with lead matching
+    - Automatic conversation creation from webhooks
+  - Settings page OAuth flow
+    - Connect MS 365 button initiates OAuth redirect
+    - Callback handler stores tokens and sets up webhooks
+    - Connection status display with last sync timestamp
 - **October 2024**: Pipeline/Deal Management Enhancements
   - Lead-to-Deal Conversion
     - Convert to Deal button in lead detail page
