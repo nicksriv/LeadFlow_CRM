@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Mail } from "lucide-react";
+import { Mail, Sparkles } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { EmailTemplate } from "@shared/schema";
 
@@ -22,6 +22,7 @@ export function EmailComposerDialog({ leadId, leadEmail, leadName }: EmailCompos
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [responseType, setResponseType] = useState<"follow-up" | "answer-question" | "proposal" | "closing">("follow-up");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -55,6 +56,33 @@ export function EmailComposerDialog({ leadId, leadEmail, leadName }: EmailCompos
       toast({
         title: "Error",
         description: "Failed to send email. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const draftEmailMutation = useMutation<
+    { subject: string; body: string },
+    Error,
+    void
+  >({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/leads/${leadId}/draft-email`, { responseType });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setSubject(data.subject);
+      setBody(data.body);
+      setSelectedTemplateId("");
+      toast({
+        title: "AI Draft Generated",
+        description: "Your email has been drafted using AI. Review and edit as needed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to generate AI draft. Please try again.",
         variant: "destructive",
       });
     },
@@ -98,20 +126,58 @@ export function EmailComposerDialog({ leadId, leadEmail, leadName }: EmailCompos
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="template">Email Template (Optional)</Label>
-            <Select value={selectedTemplateId} onValueChange={handleTemplateSelect}>
-              <SelectTrigger id="template" data-testid="select-email-template">
-                <SelectValue placeholder="Choose a template..." />
-              </SelectTrigger>
-              <SelectContent>
-                {templates?.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>
-                    {template.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex gap-2">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="template">Email Template (Optional)</Label>
+              <Select value={selectedTemplateId} onValueChange={handleTemplateSelect}>
+                <SelectTrigger id="template" data-testid="select-email-template">
+                  <SelectValue placeholder="Choose a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates?.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="response-type">AI Response Type</Label>
+              <div className="flex gap-2">
+                <Select 
+                  value={responseType} 
+                  onValueChange={(value) => setResponseType(value as "follow-up" | "answer-question" | "proposal" | "closing")}
+                >
+                  <SelectTrigger id="response-type" data-testid="select-response-type" className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="follow-up">Follow-up</SelectItem>
+                    <SelectItem value="answer-question">Answer Question</SelectItem>
+                    <SelectItem value="proposal">Proposal</SelectItem>
+                    <SelectItem value="closing">Closing</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={() => draftEmailMutation.mutate()}
+                  disabled={draftEmailMutation.isPending}
+                  data-testid="button-ai-draft"
+                  className="shrink-0"
+                >
+                  {draftEmailMutation.isPending ? (
+                    "Generating..."
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      AI Draft
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
