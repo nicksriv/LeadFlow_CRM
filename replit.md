@@ -128,3 +128,13 @@ shared/
 - All components follow design guidelines for consistent visual quality
 - Lead scoring algorithm analyzes sentiment, engagement, intent, and context
 - Email sync will use Microsoft Graph API with OAuth authentication
+
+## Future Automation Enhancements (To Be Implemented)
+1. **Auto-conversion Rules**: Automatically convert leads to deals based on criteria
+   - Example: "If lead score ≥ 80 AND has responded to 3+ emails, auto-convert to deal"
+   - Leverage existing assignment_rules table schema
+2. **Trigger-based Pipeline**: Automatically create deals when email keywords/intents detected
+   - AI detects buying signals → creates deals automatically
+3. **Email-driven Workflows**: Automatically advance deal stages based on email analysis
+   - Smart progression through pipeline based on conversation content
+4. **Intelligent Lead Assignment**: Auto-assign new leads based on territory, expertise, or workload
