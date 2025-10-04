@@ -480,7 +480,7 @@ function ConvertToDealDialog({
   const form = useForm<InsertDeal>({
     resolver: zodResolver(insertDealSchema),
     defaultValues: {
-      name: `${lead.company} - ${lead.title || 'Deal'}`,
+      name: `${lead.company} - ${lead.name || 'Deal'}`,
       pipelineId: defaultPipeline?.id || "",
       stageId: firstStage?.id || "",
       amount: 0,

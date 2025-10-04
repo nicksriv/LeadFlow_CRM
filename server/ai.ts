@@ -15,6 +15,14 @@ export interface LeadScoreAnalysis {
   };
 }
 
+export interface ConversationSummary {
+  summary: string;
+  keyPoints: string[];
+  actionItems: string[];
+  sentiment: "positive" | "neutral" | "negative";
+  nextSteps: string;
+}
+
 export async function analyzeLeadConversations(
   leadName: string,
   leadEmail: string,
@@ -122,6 +130,157 @@ Provide a comprehensive lead score analysis.`,
         urgency: 3,
         context: "Error during analysis. Default score assigned.",
       },
+    };
+  }
+}
+
+/**
+ * Summarize email conversation threads using AI
+ */
+export async function summarizeConversations(
+  conversations: Array<{
+    subject: string;
+    body: string;
+    isFromLead: boolean;
+    sentAt: Date;
+  }>
+): Promise<ConversationSummary> {
+  if (!conversations || conversations.length === 0) {
+    return {
+      summary: "No conversations yet.",
+      keyPoints: [],
+      actionItems: [],
+      sentiment: "neutral",
+      nextSteps: "Initiate first contact with the lead.",
+    };
+  }
+
+  const conversationText = conversations
+    .sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
+    .map((c, i) => {
+      const direction = c.isFromLead ? "Lead" : "Sales";
+      const date = new Date(c.sentAt).toLocaleDateString();
+      return `${date} - ${direction}: ${c.subject}\n${c.body}\n`;
+    })
+    .join("\n---\n");
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert sales assistant. Analyze email conversation threads and provide concise, actionable summaries.
+
+Your summary should include:
+1. A brief overview (2-3 sentences)
+2. Key points discussed (bullet points)
+3. Action items or commitments made
+4. Overall sentiment (positive/neutral/negative)
+5. Recommended next steps
+
+Respond with JSON in this exact format:
+{
+  "summary": "2-3 sentence overview of the conversation",
+  "keyPoints": ["point 1", "point 2", "point 3"],
+  "actionItems": ["action 1", "action 2"],
+  "sentiment": "positive" | "neutral" | "negative",
+  "nextSteps": "Clear recommendation for what to do next"
+}`,
+        },
+        {
+          role: "user",
+          content: `Summarize this email conversation thread:\n\n${conversationText}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1024,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+
+    return {
+      summary: result.summary || "Unable to generate summary.",
+      keyPoints: Array.isArray(result.keyPoints) ? result.keyPoints : [],
+      actionItems: Array.isArray(result.actionItems) ? result.actionItems : [],
+      sentiment: ["positive", "neutral", "negative"].includes(result.sentiment)
+        ? result.sentiment
+        : "neutral",
+      nextSteps: result.nextSteps || "Follow up with the lead.",
+    };
+  } catch (error) {
+    console.error("Error summarizing conversations:", error);
+    return {
+      summary: "Error generating summary. Please try again.",
+      keyPoints: [],
+      actionItems: [],
+      sentiment: "neutral",
+      nextSteps: "Review conversation manually.",
+    };
+  }
+}
+
+/**
+ * Generate AI-powered email response draft
+ */
+export async function draftEmailResponse(
+  leadName: string,
+  conversationHistory: string,
+  responseType: "follow-up" | "answer-question" | "proposal" | "closing" = "follow-up"
+): Promise<{ subject: string; body: string }> {
+  const prompts = {
+    "follow-up": "Write a friendly follow-up email to check in on their interest and move the conversation forward.",
+    "answer-question": "Write a helpful email answering their questions and providing relevant information.",
+    proposal: "Write a professional proposal email outlining the solution and next steps.",
+    closing: "Write a compelling closing email to encourage them to move forward with the purchase.",
+  };
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert sales email writer. Write professional, personalized emails that build relationships and drive conversions.
+
+Guidelines:
+- Be warm and personable, not overly formal
+- Keep it concise (3-4 paragraphs max)
+- Include a clear call-to-action
+- Reference specific points from the conversation
+- Use the lead's name naturally
+
+Respond with JSON:
+{
+  "subject": "Email subject line",
+  "body": "Email body text"
+}`,
+        },
+        {
+          role: "user",
+          content: `Write an email to ${leadName}.
+
+Conversation context:
+${conversationHistory}
+
+Task: ${prompts[responseType]}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1024,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+
+    return {
+      subject: result.subject || `Following up - ${leadName}`,
+      body: result.body || `Hi ${leadName},\n\nI wanted to follow up on our conversation.\n\nBest regards`,
+    };
+  } catch (error) {
+    console.error("Error drafting email:", error);
+    return {
+      subject: `Following up - ${leadName}`,
+      body: `Hi ${leadName},\n\nI wanted to follow up on our previous conversation.\n\nLooking forward to hearing from you.\n\nBest regards`,
     };
   }
 }

@@ -14,7 +14,7 @@ import {
   insertDealSchema,
   insertAutomationRuleSchema,
 } from "@shared/schema";
-import { analyzeLeadConversations } from "./ai";
+import { analyzeLeadConversations, summarizeConversations, draftEmailResponse } from "./ai";
 import { ms365Integration } from "./ms365";
 import { automationEngine } from "./automation";
 
@@ -190,6 +190,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(conversation);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // AI Conversation Summary
+  app.get("/api/leads/:id/conversation-summary", async (req, res) => {
+    try {
+      const conversations = await storage.getConversationsByLeadId(req.params.id);
+      const conversationsForSummary = conversations.map((c) => ({
+        subject: c.subject,
+        body: c.body,
+        isFromLead: c.isFromLead === 1,
+        sentAt: c.sentAt,
+      }));
+
+      const summary = await summarizeConversations(conversationsForSummary);
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI Email Drafting
+  app.post("/api/leads/:id/draft-email", async (req, res) => {
+    try {
+      const lead = await storage.getLead(req.params.id);
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+
+      const validResponseTypes = ["follow-up", "answer-question", "proposal", "closing"];
+      const responseType = req.body.responseType || "follow-up";
+      
+      if (!validResponseTypes.includes(responseType)) {
+        return res.status(400).json({ 
+          error: `Invalid responseType. Must be one of: ${validResponseTypes.join(", ")}` 
+        });
+      }
+
+      const conversations = await storage.getConversationsByLeadId(req.params.id);
+      const conversationHistory = conversations
+        .map((c) => {
+          const dir = c.isFromLead ? "FROM" : "TO";
+          return `[${dir}] ${c.subject}\n${c.body}`;
+        })
+        .join("\n\n---\n\n");
+
+      const draft = await draftEmailResponse(lead.name, conversationHistory, responseType);
+      
+      res.json(draft);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
