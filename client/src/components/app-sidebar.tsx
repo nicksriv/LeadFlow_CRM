@@ -1,4 +1,4 @@
-import { Home, Users, MessageSquare, Settings, TrendingUp, CheckSquare, UserCog, ChevronUp, LogOut, User as UserIcon, Kanban } from "lucide-react";
+import { Home, Users, MessageSquare, Settings, TrendingUp, CheckSquare, UserCog, ChevronUp, LogOut, User as UserIcon, Kanban, Zap } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -53,6 +53,11 @@ const menuItems = [
     title: "Team",
     url: "/team",
     icon: UserCog,
+  },
+  {
+    title: "Automation",
+    url: "/automation",
+    icon: Zap,
   },
   {
     title: "Analytics",

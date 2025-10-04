@@ -18,6 +18,7 @@ import Pipeline from "@/pages/pipeline";
 import DealDetail from "@/pages/deal-detail";
 import Tasks from "@/pages/tasks";
 import Team from "@/pages/team";
+import Automation from "@/pages/automation";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import SettingsAdvanced from "@/pages/settings-advanced";
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/deals/:id" component={DealDetail} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/team" component={Team} />
+      <Route path="/automation" component={Automation} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />
       <Route path="/settings/advanced" component={SettingsAdvanced} />

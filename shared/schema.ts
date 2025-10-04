@@ -363,6 +363,8 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 export const insertConversationSchema = createInsertSchema(conversations).omit({
   id: true,
   createdAt: true,
+}).extend({
+  sentAt: z.coerce.date(),
 });
 
 export const insertLeadScoreSchema = createInsertSchema(leadScores).omit({

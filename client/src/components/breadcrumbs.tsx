@@ -29,8 +29,10 @@ export function Breadcrumbs() {
     const routeMap: Record<string, string> = {
       leads: "Leads",
       conversations: "Conversations",
+      pipeline: "Pipeline",
       tasks: "Tasks",
       team: "Team",
+      automation: "Automation",
       analytics: "Analytics",
       settings: "Settings",
       advanced: "Advanced Settings",

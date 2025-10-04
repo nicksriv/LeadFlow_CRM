@@ -12,6 +12,7 @@ import {
   insertPipelineSchema,
   insertPipelineStageSchema,
   insertDealSchema,
+  insertAutomationRuleSchema,
 } from "@shared/schema";
 import { analyzeLeadConversations } from "./ai";
 import { ms365Integration } from "./ms365";
@@ -1024,6 +1025,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json(forecast);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Automation Rules routes
+  app.get("/api/automation-rules", async (req, res) => {
+    try {
+      const rules = await storage.getAutomationRules();
+      res.json(rules);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/automation-rules/:id", async (req, res) => {
+    try {
+      const rule = await storage.getAutomationRule(req.params.id);
+      if (!rule) {
+        return res.status(404).json({ error: "Automation rule not found" });
+      }
+      res.json(rule);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/automation-rules", async (req, res) => {
+    try {
+      const validatedData = insertAutomationRuleSchema.parse(req.body);
+      const rule = await storage.createAutomationRule(validatedData);
+      res.json(rule);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/automation-rules/:id", async (req, res) => {
+    try {
+      const validatedData = insertAutomationRuleSchema.partial().parse(req.body);
+      const rule = await storage.updateAutomationRule(req.params.id, validatedData);
+      if (!rule) {
+        return res.status(404).json({ error: "Automation rule not found" });
+      }
+      res.json(rule);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/automation-rules/:id", async (req, res) => {
+    try {
+      await storage.deleteAutomationRule(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Automation Logs routes
+  app.get("/api/automation-logs", async (req, res) => {
+    try {
+      const logs = await storage.getAutomationLogs();
+      res.json(logs);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

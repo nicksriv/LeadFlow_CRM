@@ -11,6 +11,7 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 - **Revenue Forecasting**: Weighted pipeline value calculations with monthly breakdown and projections
 - **AI-Powered Scoring**: Automatic lead scoring (0-100) using OpenAI to analyze email conversations
 - **Status Classification**: Intelligent categorization into Cold (0-33), Warm (34-66), and Hot (67-100) leads
+- **Workflow Automation**: Trigger-based automation engine for auto-conversion, task creation, and deal progression
 - **Email Sending**: Send emails directly from CRM with email template support
 - **Email Templates**: Create and manage reusable email templates
 - **MS 365 Integration**: Sync email conversations from Microsoft 365 mailbox
@@ -94,6 +95,36 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
     - API endpoints for user hierarchy with proper route ordering
     - Owner assignment in lead forms with unassigned state support
     - Seeded test users for demonstration (1 admin, 2 managers, 4 sales reps)
+- **October 2024**: Workflow Automation Engine Implementation
+  - Database schema extensions
+    - automation_rules table: stores trigger-action configurations with JSONB conditions
+    - automation_logs table: tracks execution history with success/error tracking
+  - Core automation engine (server/automation.ts)
+    - Trigger detection: score_changed, conversation_received, deal_stage_change
+    - Action execution: convert_to_deal, create_task, advance_stage, assign_lead, send_email
+    - Condition evaluation with flexible JSONB configuration
+    - Error handling and execution logging
+  - Integration with existing systems
+    - Automatic triggers on lead score updates (onLeadScoreChange)
+    - Triggers on email conversation received (onConversationReceived)
+    - Triggers on deal stage advancement (onDealStageChange)
+    - Integrated with AI scoring system for real-time automation
+  - API endpoints for automation management
+    - Full CRUD operations for automation rules
+    - Automation execution logs endpoint
+    - Rule activation/deactivation toggle
+  - Automation management UI (client/src/pages/automation.tsx)
+    - Dashboard with active rules count and execution statistics
+    - Visual rule cards with trigger/action badges
+    - Rule details dialog with JSON condition viewer
+    - Execution logs with success/error tracking
+    - Real-time rule activation toggle
+  - Default automation rules seeded
+    - Auto-convert hot leads (score ≥ 80) to deals
+    - Create follow-up task for warm leads (score 34-66)
+    - Alert on pricing inquiry keywords
+    - Auto-create deal on buying signal detection
+    - Re-engagement task for cold leads
 - **December 2024**: Added comprehensive new features
   - Email sending capability with template support in lead detail view
   - Email templates management system
@@ -116,13 +147,16 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 client/
   src/
     components/      # Reusable UI components
-    pages/          # Main page components (Dashboard, Leads, Conversations, Tasks, Team, Analytics, Settings)
+    pages/          # Main page components (Dashboard, Leads, Conversations, Tasks, Team, Automation, Analytics, Settings)
     lib/            # Utilities and configurations
 server/
-  routes.ts        # API endpoints (leads, users, conversations, tasks, templates, scoring)
+  routes.ts        # API endpoints (leads, users, conversations, tasks, templates, scoring, automation)
   storage.ts       # Database storage interface with hierarchy methods
+  automation.ts    # Workflow automation engine with trigger/action execution
+  ai.ts           # AI lead scoring and conversation analysis
+  ms365.ts        # MS 365 integration with OAuth and email sync
 shared/
-  schema.ts        # Database schema and types (8 core tables)
+  schema.ts        # Database schema and types (16 core tables)
 ```
 
 ## User Hierarchy
@@ -140,6 +174,13 @@ shared/
 - `tasks`: Task management with assignments
 - `scoring_config`: Customizable AI scoring weights
 - `assignment_rules`: Automated lead routing rules
+- `automation_rules`: Workflow automation trigger-action configurations
+- `automation_logs`: Execution history and error tracking for automations
+- `pipelines`: Sales pipeline configurations
+- `pipeline_stages`: Pipeline stages with probability and order
+- `deals`: Deal tracking with stage and revenue information
+- `deal_stage_history`: Historical record of deal progression
+- `sync_state`: MS 365 sync state and token storage
 
 ## Environment Variables
 - `OPENAI_API_KEY`: Required for AI-powered lead scoring

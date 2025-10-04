@@ -35,7 +35,7 @@ export class AutomationEngine {
   ): Promise<void> {
     const rules = await storage.getAutomationRules();
     const activeRules = rules.filter(
-      (r: AutomationRule) => r.isActive === 1 && r.triggerType === "lead_score_change"
+      (r: AutomationRule) => r.isActive === 1 && r.triggerType === "score_changed"
     );
 
     const lead = await storage.getLead(leadId);
@@ -167,11 +167,14 @@ export class AutomationEngine {
   ): boolean {
     const conditions = rule.triggerConditions as any;
 
-    // Check score threshold
-    if (conditions.scoreThreshold !== undefined) {
-      const threshold = conditions.scoreThreshold;
-      const crossedThreshold = oldScore < threshold && newScore >= threshold;
-      if (!crossedThreshold) return false;
+    // Check minimum score (new score must be at or above threshold)
+    if (conditions.minScore !== undefined && newScore < conditions.minScore) {
+      return false;
+    }
+
+    // Check maximum score (new score must be at or below threshold)
+    if (conditions.maxScore !== undefined && newScore > conditions.maxScore) {
+      return false;
     }
 
     // Check status
