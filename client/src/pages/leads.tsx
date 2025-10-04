@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { LeadScoreMeter } from "@/components/lead-score-meter";
 import { Link } from "wouter";
@@ -107,14 +108,28 @@ export default function Leads() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-muted-foreground">Loading leads...</div>
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Card key={i} className="p-6">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-5 w-16" />
+                  </div>
+                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-2 w-full max-w-xs" />
+                </div>
+                <Skeleton className="h-16 w-16 rounded-full" />
+              </div>
+            </Card>
+          ))}
         </div>
       ) : filteredLeads?.length === 0 ? (
-        <Card className="p-12">
+        <Card className="p-12 bg-gradient-to-br from-blue-500/5 to-purple-500/5 dark:from-blue-500/10 dark:to-purple-500/10">
           <div className="text-center space-y-4">
-            <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <Plus className="h-6 w-6 text-muted-foreground" />
+            <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+              <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
               <h3 className="text-lg font-semibold">No leads found</h3>

@@ -1,4 +1,3 @@
-import { Progress } from "@/components/ui/progress";
 import type { LeadStatus } from "@shared/schema";
 
 interface LeadScoreMeterProps {
@@ -14,16 +13,16 @@ export function LeadScoreMeter({
   showLabel = true,
   size = "default" 
 }: LeadScoreMeterProps) {
-  const getStatusColor = (status: LeadStatus) => {
+  const getStatusGradient = (status: LeadStatus) => {
     switch (status) {
       case "hot":
-        return "bg-status-hot";
+        return "from-orange-500 via-red-500 to-red-600";
       case "warm":
-        return "bg-status-warm";
+        return "from-yellow-400 via-orange-400 to-orange-500";
       case "cold":
-        return "bg-status-cold";
+        return "from-blue-400 via-blue-500 to-cyan-500";
       default:
-        return "bg-status-cold";
+        return "from-blue-400 via-blue-500 to-cyan-500";
     }
   };
 
@@ -37,14 +36,9 @@ export function LeadScoreMeter({
           <span className="text-sm font-semibold tabular-nums">{score}/100</span>
         </div>
       )}
-      <div className="relative">
-        <Progress 
-          value={score} 
-          className={heightClass}
-          data-testid="progress-lead-score"
-        />
+      <div className="relative w-full bg-muted rounded-full overflow-hidden" data-testid="progress-lead-score">
         <div 
-          className={`absolute inset-0 rounded-full ${getStatusColor(status)} transition-all`}
+          className={`${heightClass} bg-gradient-to-r ${getStatusGradient(status)} transition-all duration-500 ease-out shadow-sm`}
           style={{ width: `${score}%` }}
         />
       </div>

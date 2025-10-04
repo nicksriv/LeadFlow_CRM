@@ -4,6 +4,7 @@ import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { LeadScoreMeter } from "@/components/lead-score-meter";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import type { Lead } from "@shared/schema";
@@ -29,8 +30,41 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading dashboard...</div>
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-4 w-96 mt-2" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-32 mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {[1, 2].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[1, 2, 3].map((j) => (
+                    <Skeleton key={j} className="h-16 w-full" />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
@@ -50,24 +84,28 @@ export default function Dashboard() {
           value={stats?.totalLeads || 0}
           icon={Users}
           description="across all statuses"
+          color="blue"
         />
         <StatCard
           title="Hot Leads"
           value={stats?.hotLeads || 0}
           icon={Target}
           description="ready to convert"
+          color="orange"
         />
         <StatCard
           title="Average Score"
           value={stats?.avgScore || 0}
           icon={TrendingUp}
           description="out of 100"
+          color="purple"
         />
         <StatCard
           title="Conversations"
           value={stats?.totalConversations || 0}
           icon={Mail}
           description="total email threads"
+          color="green"
         />
       </div>
 

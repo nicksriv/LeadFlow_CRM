@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users as UsersIcon, ChevronRight, Mail } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Users as UsersIcon, ChevronRight, Mail, Building2 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -81,14 +82,36 @@ export default function Team() {
       .slice(0, 2);
   };
 
+  const getAvatarColor = (id: string) => {
+    const colors = [
+      "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      "bg-green-500/10 text-green-600 dark:text-green-400",
+      "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+      "bg-pink-500/10 text-pink-600 dark:text-pink-400",
+      "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+    ];
+    const index = parseInt(id.split('').reduce((a, c) => a + c.charCodeAt(0), 0).toString()) % colors.length;
+    return colors[index];
+  };
+
   const getRoleBadge = (role: string) => {
-    const variants: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
-      admin: { label: "Admin", variant: "default" },
-      sales_manager: { label: "Manager", variant: "secondary" },
-      sales_rep: { label: "Sales Rep", variant: "outline" },
+    const variants: Record<string, { label: string; className: string }> = {
+      admin: { 
+        label: "Admin", 
+        className: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20" 
+      },
+      sales_manager: { 
+        label: "Manager", 
+        className: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20" 
+      },
+      sales_rep: { 
+        label: "Sales Rep", 
+        className: "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20" 
+      },
     };
     const config = variants[role] || variants.sales_rep;
-    return { label: config.label, variant: config.variant };
+    return { label: config.label, className: config.className };
   };
 
   const admins = users.filter((u) => u.role === "admin");
@@ -104,8 +127,33 @@ export default function Team() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading team...</div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <Skeleton className="h-9 w-48" />
+            <Skeleton className="h-4 w-96 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div>
+          <Skeleton className="h-6 w-40 mb-3" />
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-40" />
+                    </div>
+                    <Skeleton className="h-5 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -250,8 +298,8 @@ export default function Team() {
                 <Card key={admin.id} data-testid={`card-user-${admin.id}`}>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback>{getInitials(admin.name)}</AvatarFallback>
+                      <Avatar className={`h-12 w-12 ${getAvatarColor(admin.id)}`}>
+                        <AvatarFallback className="bg-transparent">{getInitials(admin.name)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{admin.name}</p>
@@ -260,7 +308,7 @@ export default function Team() {
                           {admin.email}
                         </p>
                       </div>
-                      <Badge variant={getRoleBadge(admin.role).variant}>
+                      <Badge variant="outline" className={getRoleBadge(admin.role).className}>
                         {getRoleBadge(admin.role).label}
                       </Badge>
                     </div>
@@ -282,8 +330,8 @@ export default function Team() {
                 <Card key={manager.id} data-testid={`card-team-${manager.id}`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback>{getInitials(manager.name)}</AvatarFallback>
+                      <Avatar className={`h-10 w-10 ${getAvatarColor(manager.id)}`}>
+                        <AvatarFallback className="bg-transparent">{getInitials(manager.name)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
                         <CardTitle className="text-base">{manager.name}</CardTitle>
@@ -292,7 +340,7 @@ export default function Team() {
                           {manager.email}
                         </CardDescription>
                       </div>
-                      <Badge variant={getRoleBadge(manager.role).variant}>
+                      <Badge variant="outline" className={getRoleBadge(manager.role).className}>
                         {getRoleBadge(manager.role).label}
                       </Badge>
                     </div>
@@ -307,8 +355,8 @@ export default function Team() {
                             data-testid={`card-team-member-${member.id}`}
                           >
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="text-xs">
+                            <Avatar className={`h-8 w-8 ${getAvatarColor(member.id)}`}>
+                              <AvatarFallback className="bg-transparent text-xs">
                                 {getInitials(member.name)}
                               </AvatarFallback>
                             </Avatar>
@@ -318,8 +366,8 @@ export default function Team() {
                                 {member.email}
                               </p>
                             </div>
-                            <Badge variant="secondary" className="text-xs">
-                              Sales Rep
+                            <Badge variant="outline" className={`text-xs ${getRoleBadge(member.role).className}`}>
+                              {getRoleBadge(member.role).label}
                             </Badge>
                           </div>
                         ))}
@@ -349,8 +397,8 @@ export default function Team() {
                 <Card key={rep.id} data-testid={`card-unassigned-${rep.id}`}>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback>{getInitials(rep.name)}</AvatarFallback>
+                      <Avatar className={`h-10 w-10 ${getAvatarColor(rep.id)}`}>
+                        <AvatarFallback className="bg-transparent">{getInitials(rep.name)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{rep.name}</p>
@@ -359,7 +407,7 @@ export default function Team() {
                           {rep.email}
                         </p>
                       </div>
-                      <Badge variant="secondary">
+                      <Badge variant="outline" className={getRoleBadge(rep.role).className}>
                         {getRoleBadge(rep.role).label}
                       </Badge>
                     </div>
