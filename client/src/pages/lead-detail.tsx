@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
@@ -9,9 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
-import type { Lead, Conversation, Activity } from "@shared/schema";
+import type { Lead, Conversation, Activity, Task } from "@shared/schema";
 import { useState } from "react";
 import { LeadFormDialog } from "@/components/lead-form-dialog";
+import { EmailComposerDialog } from "@/components/email-composer-dialog";
+import { TaskDialog } from "@/components/task-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -44,6 +46,11 @@ export default function LeadDetail() {
 
   const { data: activities } = useQuery<Activity[]>({
     queryKey: ["/api/leads", leadId, "activities"],
+    enabled: !!leadId,
+  });
+
+  const { data: tasks } = useQuery<Task[]>({
+    queryKey: ["/api/leads", leadId, "tasks"],
     enabled: !!leadId,
   });
 
@@ -104,6 +111,12 @@ export default function LeadDetail() {
           <p className="text-muted-foreground">{lead.company}</p>
         </div>
         <div className="flex items-center gap-2">
+          <EmailComposerDialog
+            leadId={lead.id}
+            leadEmail={lead.email}
+            leadName={lead.name}
+          />
+          <TaskDialog leadId={lead.id} />
           <Button
             variant="outline"
             onClick={() => setIsEditOpen(true)}
@@ -230,9 +243,12 @@ export default function LeadDetail() {
 
         <div className="lg:col-span-2">
           <Tabs defaultValue="conversations" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="conversations" data-testid="tab-conversations">
                 Conversations ({conversations?.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="tasks" data-testid="tab-tasks">
+                Tasks ({tasks?.length || 0})
               </TabsTrigger>
               <TabsTrigger value="activity" data-testid="tab-activity">
                 Activity ({activities?.length || 0})
@@ -275,6 +291,64 @@ export default function LeadDetail() {
                     </CardContent>
                   </Card>
                 ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="tasks" className="space-y-4 mt-6">
+              {tasks?.length === 0 ? (
+                <Card className="p-12">
+                  <div className="text-center text-muted-foreground">
+                    No tasks yet. Create a task to track follow-ups and reminders.
+                  </div>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {tasks?.map((task) => (
+                    <Card key={task.id} data-testid={`card-task-${task.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="pt-0.5">
+                            {task.status === "completed" ? (
+                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            ) : (
+                              <Clock className="h-5 w-5 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="font-medium">{task.title}</h3>
+                              <Badge
+                                variant={
+                                  task.priority === "urgent"
+                                    ? "destructive"
+                                    : task.priority === "high"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {task.priority}
+                              </Badge>
+                            </div>
+                            {task.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {task.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                              {task.dueDate && (
+                                <span>
+                                  Due {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
+                                </span>
+                              )}
+                              <span>•</span>
+                              <span className="capitalize">{task.status}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
             </TabsContent>
 

@@ -1,4 +1,4 @@
-import { Home, Users, MessageSquare, Settings, TrendingUp } from "lucide-react";
+import { Home, Users, MessageSquare, Settings, TrendingUp, CheckSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -27,6 +27,11 @@ const menuItems = [
     title: "Conversations",
     url: "/conversations",
     icon: MessageSquare,
+  },
+  {
+    title: "Tasks",
+    url: "/tasks",
+    icon: CheckSquare,
   },
   {
     title: "Analytics",

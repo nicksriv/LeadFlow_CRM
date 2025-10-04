@@ -12,8 +12,10 @@ import Dashboard from "@/pages/dashboard";
 import Leads from "@/pages/leads";
 import LeadDetail from "@/pages/lead-detail";
 import Conversations from "@/pages/conversations";
+import Tasks from "@/pages/tasks";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
+import SettingsAdvanced from "@/pages/settings-advanced";
 
 function Router() {
   return (
@@ -22,8 +24,10 @@ function Router() {
       <Route path="/leads" component={Leads} />
       <Route path="/leads/:id" component={LeadDetail} />
       <Route path="/conversations" component={Conversations} />
+      <Route path="/tasks" component={Tasks} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/settings" component={Settings} />
+      <Route path="/settings/advanced" component={SettingsAdvanced} />
       <Route component={NotFound} />
     </Switch>
   );

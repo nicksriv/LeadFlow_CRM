@@ -4,6 +4,12 @@ import {
   leadScores,
   activities,
   syncState,
+  emailTemplates,
+  users,
+  assignmentRules,
+  leadAssignments,
+  tasks,
+  scoringConfig,
   type Lead,
   type InsertLead,
   type Conversation,
@@ -14,6 +20,18 @@ import {
   type InsertActivity,
   type SyncState,
   type InsertSyncState,
+  type EmailTemplate,
+  type InsertEmailTemplate,
+  type User,
+  type InsertUser,
+  type AssignmentRule,
+  type InsertAssignmentRule,
+  type LeadAssignment,
+  type InsertLeadAssignment,
+  type Task,
+  type InsertTask,
+  type ScoringConfig,
+  type InsertScoringConfig,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -42,6 +60,41 @@ export interface IStorage {
   // Sync State
   getSyncState(): Promise<SyncState | undefined>;
   updateSyncState(state: Partial<InsertSyncState>): Promise<SyncState>;
+
+  // Email Templates
+  getEmailTemplates(): Promise<EmailTemplate[]>;
+  getEmailTemplate(id: string): Promise<EmailTemplate | undefined>;
+  createEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate>;
+  updateEmailTemplate(id: string, template: Partial<InsertEmailTemplate>): Promise<EmailTemplate | undefined>;
+  deleteEmailTemplate(id: string): Promise<void>;
+
+  // Users
+  getUsers(): Promise<User[]>;
+  getUser(id: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+
+  // Assignment Rules
+  getAssignmentRules(): Promise<AssignmentRule[]>;
+  createAssignmentRule(rule: InsertAssignmentRule): Promise<AssignmentRule>;
+  updateAssignmentRule(id: string, rule: Partial<InsertAssignmentRule>): Promise<AssignmentRule | undefined>;
+  deleteAssignmentRule(id: string): Promise<void>;
+
+  // Lead Assignments
+  getLeadAssignment(leadId: string): Promise<LeadAssignment | undefined>;
+  createLeadAssignment(assignment: InsertLeadAssignment): Promise<LeadAssignment>;
+
+  // Tasks
+  getTasks(leadId: string): Promise<Task[]>;
+  getAllTasks(): Promise<Task[]>;
+  getTask(id: string): Promise<Task | undefined>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: string, task: Partial<InsertTask>): Promise<Task | undefined>;
+  deleteTask(id: string): Promise<void>;
+
+  // Scoring Config
+  getScoringConfig(): Promise<ScoringConfig | undefined>;
+  updateScoringConfig(config: Partial<InsertScoringConfig>): Promise<ScoringConfig>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -138,6 +191,148 @@ export class DatabaseStorage implements IStorage {
     } else {
       const [state] = await db.insert(syncState).values(updates).returning();
       return state;
+    }
+  }
+
+  async getEmailTemplates(): Promise<EmailTemplate[]> {
+    return db.select().from(emailTemplates).orderBy(desc(emailTemplates.createdAt));
+  }
+
+  async getEmailTemplate(id: string): Promise<EmailTemplate | undefined> {
+    const [template] = await db.select().from(emailTemplates).where(eq(emailTemplates.id, id));
+    return template || undefined;
+  }
+
+  async createEmailTemplate(insertTemplate: InsertEmailTemplate): Promise<EmailTemplate> {
+    const [template] = await db.insert(emailTemplates).values(insertTemplate).returning();
+    return template;
+  }
+
+  async updateEmailTemplate(id: string, updates: Partial<InsertEmailTemplate>): Promise<EmailTemplate | undefined> {
+    const [template] = await db
+      .update(emailTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(emailTemplates.id, id))
+      .returning();
+    return template || undefined;
+  }
+
+  async deleteEmailTemplate(id: string): Promise<void> {
+    await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+  }
+
+  async getUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
+  async getAssignmentRules(): Promise<AssignmentRule[]> {
+    return db.select().from(assignmentRules).orderBy(desc(assignmentRules.priority));
+  }
+
+  async createAssignmentRule(insertRule: InsertAssignmentRule): Promise<AssignmentRule> {
+    const [rule] = await db.insert(assignmentRules).values(insertRule).returning();
+    return rule;
+  }
+
+  async updateAssignmentRule(id: string, updates: Partial<InsertAssignmentRule>): Promise<AssignmentRule | undefined> {
+    const [rule] = await db
+      .update(assignmentRules)
+      .set(updates)
+      .where(eq(assignmentRules.id, id))
+      .returning();
+    return rule || undefined;
+  }
+
+  async deleteAssignmentRule(id: string): Promise<void> {
+    await db.delete(assignmentRules).where(eq(assignmentRules.id, id));
+  }
+
+  async getLeadAssignment(leadId: string): Promise<LeadAssignment | undefined> {
+    const [assignment] = await db
+      .select()
+      .from(leadAssignments)
+      .where(eq(leadAssignments.leadId, leadId))
+      .orderBy(desc(leadAssignments.assignedAt))
+      .limit(1);
+    return assignment || undefined;
+  }
+
+  async createLeadAssignment(insertAssignment: InsertLeadAssignment): Promise<LeadAssignment> {
+    const [assignment] = await db.insert(leadAssignments).values(insertAssignment).returning();
+    return assignment;
+  }
+
+  async getTasks(leadId: string): Promise<Task[]> {
+    return db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.leadId, leadId))
+      .orderBy(desc(tasks.createdAt));
+  }
+
+  async getAllTasks(): Promise<Task[]> {
+    return db.select().from(tasks).orderBy(desc(tasks.createdAt));
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task || undefined;
+  }
+
+  async createTask(insertTask: InsertTask): Promise<Task> {
+    const [task] = await db.insert(tasks).values(insertTask).returning();
+    return task;
+  }
+
+  async updateTask(id: string, updates: Partial<InsertTask>): Promise<Task | undefined> {
+    const [task] = await db
+      .update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, id))
+      .returning();
+    return task || undefined;
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    await db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async getScoringConfig(): Promise<ScoringConfig | undefined> {
+    const [config] = await db.select().from(scoringConfig).limit(1);
+    return config || undefined;
+  }
+
+  async updateScoringConfig(updates: Partial<InsertScoringConfig>): Promise<ScoringConfig> {
+    const existing = await this.getScoringConfig();
+    if (existing) {
+      const [config] = await db
+        .update(scoringConfig)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(scoringConfig.id, existing.id))
+        .returning();
+      return config;
+    } else {
+      const [config] = await db.insert(scoringConfig).values(updates).returning();
+      return config;
     }
   }
 }

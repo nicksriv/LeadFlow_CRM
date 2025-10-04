@@ -71,6 +71,72 @@ export const syncState = pgTable("sync_state", {
   expiresAt: timestamp("expires_at"),
 });
 
+// Email templates
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  category: text("category"), // follow-up, introduction, proposal, etc.
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Users/Team members for assignment
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  role: text("role").notNull().default("sales_rep"), // admin, sales_manager, sales_rep
+  isActive: integer("is_active").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Assignment rules
+export const assignmentRules = pgTable("assignment_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  condition: text("condition").notNull(), // score_threshold, territory, round_robin
+  conditionValue: jsonb("condition_value").notNull(), // threshold value, territory data, etc.
+  assignToUserId: varchar("assign_to_user_id").references(() => users.id),
+  isActive: integer("is_active").notNull().default(1),
+  priority: integer("priority").notNull().default(0), // Higher number = higher priority
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Lead assignments
+export const leadAssignments = pgTable("lead_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  assignedAt: timestamp("assigned_at").notNull().defaultNow(),
+  assignedBy: text("assigned_by"), // auto, manual, rule_id
+});
+
+// Tasks
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, cancelled
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Scoring configuration for weighted criteria
+export const scoringConfig = pgTable("scoring_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sentimentWeight: integer("sentiment_weight").notNull().default(25),
+  engagementWeight: integer("engagement_weight").notNull().default(25),
+  responseTimeWeight: integer("response_time_weight").notNull().default(25),
+  intentWeight: integer("intent_weight").notNull().default(25),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Define relations
 export const leadsRelations = relations(leads, ({ many }) => ({
   conversations: many(conversations),
@@ -96,6 +162,28 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   lead: one(leads, {
     fields: [activities.leadId],
     references: [leads.id],
+  }),
+}));
+
+export const tasksRelations = relations(tasks, ({ one }) => ({
+  lead: one(leads, {
+    fields: [tasks.leadId],
+    references: [leads.id],
+  }),
+  assignedTo: one(users, {
+    fields: [tasks.assignedToUserId],
+    references: [users.id],
+  }),
+}));
+
+export const leadAssignmentsRelations = relations(leadAssignments, ({ one }) => ({
+  lead: one(leads, {
+    fields: [leadAssignments.leadId],
+    references: [leads.id],
+  }),
+  user: one(users, {
+    fields: [leadAssignments.userId],
+    references: [users.id],
   }),
 }));
 
@@ -128,6 +216,37 @@ export const insertSyncStateSchema = createInsertSchema(syncState).omit({
   id: true,
 });
 
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAssignmentRuleSchema = createInsertSchema(assignmentRules).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertLeadAssignmentSchema = createInsertSchema(leadAssignments).omit({
+  id: true,
+  assignedAt: true,
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertScoringConfigSchema = createInsertSchema(scoringConfig).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
@@ -139,6 +258,18 @@ export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type SyncState = typeof syncState.$inferSelect;
 export type InsertSyncState = z.infer<typeof insertSyncStateSchema>;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type AssignmentRule = typeof assignmentRules.$inferSelect;
+export type InsertAssignmentRule = z.infer<typeof insertAssignmentRuleSchema>;
+export type LeadAssignment = typeof leadAssignments.$inferSelect;
+export type InsertLeadAssignment = z.infer<typeof insertLeadAssignmentSchema>;
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type ScoringConfig = typeof scoringConfig.$inferSelect;
+export type InsertScoringConfig = z.infer<typeof insertScoringConfigSchema>;
 
 // Extended types with relations
 export type LeadWithRelations = Lead & {

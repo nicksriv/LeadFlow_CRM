@@ -225,6 +225,41 @@ export class MS365Integration {
   }
 
   /**
+   * Send email via MS 365 Graph API
+   * 
+   * Uses Microsoft Graph API: POST /me/sendMail
+   */
+  async sendEmail(params: {
+    to: string;
+    subject: string;
+    body: string;
+    accessToken: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    console.log(`MS365: Would send email to ${params.to}: "${params.subject}"`);
+    
+    // In production, POST to:
+    // https://graph.microsoft.com/v1.0/me/sendMail
+    // {
+    //   "message": {
+    //     "subject": params.subject,
+    //     "body": {
+    //       "contentType": "HTML",
+    //       "content": params.body
+    //     },
+    //     "toRecipients": [
+    //       { "emailAddress": { "address": params.to } }
+    //     ]
+    //   }
+    // }
+    
+    // Simulate successful send
+    return {
+      success: true,
+      messageId: `msg_${Date.now()}`,
+    };
+  }
+
+  /**
    * Handle webhook notification from MS 365
    */
   async handleWebhookNotification(notification: any): Promise<void> {

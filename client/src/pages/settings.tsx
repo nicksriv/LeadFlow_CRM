@@ -2,9 +2,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Mail, RefreshCw, Link2, CheckCircle2 } from "lucide-react";
+import { Mail, RefreshCw, Link2, CheckCircle2, Settings2, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 import type { SyncState } from "@shared/schema";
 
 export default function Settings() {
@@ -127,6 +128,25 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        <Link href="/settings/advanced">
+          <Card className="hover-elevate cursor-pointer">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings2 className="h-5 w-5" />
+                    Advanced Settings
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Configure AI scoring weights and automation rules
+                  </CardDescription>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </CardHeader>
+          </Card>
+        </Link>
 
         <Card>
           <CardHeader>
