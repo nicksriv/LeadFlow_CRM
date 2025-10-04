@@ -9,6 +9,9 @@ import {
   insertAssignmentRuleSchema,
   insertTaskSchema,
   insertScoringConfigSchema,
+  insertPipelineSchema,
+  insertPipelineStageSchema,
+  insertDealSchema,
 } from "@shared/schema";
 import { analyzeLeadConversations } from "./ai";
 import { ms365Integration } from "./ms365";
@@ -583,6 +586,350 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(config);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Pipeline routes
+  app.get("/api/pipelines", async (req, res) => {
+    try {
+      const pipelines = await storage.getPipelines();
+      res.json(pipelines);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/pipelines/default", async (req, res) => {
+    try {
+      const pipeline = await storage.getDefaultPipeline();
+      if (!pipeline) {
+        return res.status(404).json({ error: "No default pipeline found" });
+      }
+      res.json(pipeline);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/pipelines/:id", async (req, res) => {
+    try {
+      const pipeline = await storage.getPipeline(req.params.id);
+      if (!pipeline) {
+        return res.status(404).json({ error: "Pipeline not found" });
+      }
+      res.json(pipeline);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pipelines", async (req, res) => {
+    try {
+      const validatedData = insertPipelineSchema.parse(req.body);
+      
+      // Get current default BEFORE creating new pipeline
+      const oldDefault = validatedData.isDefault === 1 ? await storage.getDefaultPipeline() : null;
+      
+      // Create new pipeline
+      const pipeline = await storage.createPipeline(validatedData);
+      
+      // If successfully created as default, demote the old one
+      if (pipeline.isDefault === 1 && oldDefault && oldDefault.id !== pipeline.id) {
+        await storage.updatePipeline(oldDefault.id, { isDefault: 0 });
+      }
+      
+      res.json(pipeline);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/pipelines/:id", async (req, res) => {
+    try {
+      const validatedData = insertPipelineSchema.partial().parse(req.body);
+      
+      // Prevent demoting the last default pipeline
+      if (validatedData.isDefault === 0) {
+        const currentPipeline = await storage.getPipeline(req.params.id);
+        if (currentPipeline?.isDefault === 1) {
+          const allPipelines = await storage.getPipelines();
+          if (allPipelines.length === 1 || allPipelines.filter(p => p.isDefault === 1).length === 1) {
+            return res.status(400).json({ 
+              error: "Cannot remove default status from the only default pipeline. Set another pipeline as default first." 
+            });
+          }
+        }
+      }
+      
+      // Get old default BEFORE updating (only if we're setting a new default)
+      const oldDefault = validatedData.isDefault === 1 ? await storage.getDefaultPipeline() : null;
+      
+      // Update the pipeline first
+      const pipeline = await storage.updatePipeline(req.params.id, validatedData);
+      if (!pipeline) {
+        return res.status(404).json({ error: "Pipeline not found" });
+      }
+      
+      // If successfully updated to default, demote the old one
+      if (pipeline.isDefault === 1 && oldDefault && oldDefault.id !== pipeline.id) {
+        await storage.updatePipeline(oldDefault.id, { isDefault: 0 });
+      }
+      
+      res.json(pipeline);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/pipelines/:id", async (req, res) => {
+    try {
+      // Check for dependent deals
+      const deals = await storage.getDeals({ pipelineId: req.params.id });
+      if (deals.length > 0) {
+        return res.status(400).json({ 
+          error: `Cannot delete pipeline with ${deals.length} active deal(s). Please reassign or delete the deals first.` 
+        });
+      }
+
+      // Check if it's the default pipeline
+      const pipeline = await storage.getPipeline(req.params.id);
+      if (pipeline?.isDefault === 1) {
+        return res.status(400).json({ 
+          error: "Cannot delete the default pipeline. Set another pipeline as default first." 
+        });
+      }
+
+      await storage.deletePipeline(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Pipeline Stage routes
+  app.get("/api/pipelines/:pipelineId/stages", async (req, res) => {
+    try {
+      const stages = await storage.getStages(req.params.pipelineId);
+      res.json(stages);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pipelines/:pipelineId/stages", async (req, res) => {
+    try {
+      const validatedData = insertPipelineStageSchema.parse({
+        ...req.body,
+        pipelineId: req.params.pipelineId,
+      });
+      const stage = await storage.createStage(validatedData);
+      res.json(stage);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/stages/:id", async (req, res) => {
+    try {
+      const validatedData = insertPipelineStageSchema.partial().parse(req.body);
+      const stage = await storage.updateStage(req.params.id, validatedData);
+      if (!stage) {
+        return res.status(404).json({ error: "Stage not found" });
+      }
+      res.json(stage);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/stages/:id", async (req, res) => {
+    try {
+      // Check for dependent deals
+      const deals = await storage.getDeals({ stageId: req.params.id });
+      if (deals.length > 0) {
+        return res.status(400).json({ 
+          error: `Cannot delete stage with ${deals.length} active deal(s). Please move the deals to another stage first.` 
+        });
+      }
+
+      await storage.deleteStage(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/stages/reorder", async (req, res) => {
+    try {
+      const { stageIds } = req.body;
+      if (!Array.isArray(stageIds)) {
+        return res.status(400).json({ error: "stageIds must be an array" });
+      }
+      await storage.reorderStages(stageIds);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Deal routes
+  app.get("/api/deals", async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.pipelineId) filters.pipelineId = req.query.pipelineId as string;
+      if (req.query.stageId) filters.stageId = req.query.stageId as string;
+      if (req.query.ownerId) filters.ownerId = req.query.ownerId as string;
+      if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.minAmount) filters.minAmount = parseFloat(req.query.minAmount as string);
+      if (req.query.maxAmount) filters.maxAmount = parseFloat(req.query.maxAmount as string);
+      if (req.query.fromDate) filters.fromDate = new Date(req.query.fromDate as string);
+      if (req.query.toDate) filters.toDate = new Date(req.query.toDate as string);
+
+      const deals = await storage.getDeals(filters);
+      res.json(deals);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/deals/:id", async (req, res) => {
+    try {
+      const deal = await storage.getDeal(req.params.id);
+      if (!deal) {
+        return res.status(404).json({ error: "Deal not found" });
+      }
+      res.json(deal);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/deals", async (req, res) => {
+    try {
+      const validatedData = insertDealSchema.parse(req.body);
+      const deal = await storage.createDeal(validatedData);
+
+      if (deal.leadId) {
+        await storage.createActivity({
+          leadId: deal.leadId,
+          type: "deal_created",
+          description: `Deal "${deal.name}" was created with value $${deal.amount.toLocaleString()}`,
+          metadata: { dealId: deal.id },
+        });
+      }
+
+      res.json(deal);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/deals/:id", async (req, res) => {
+    try {
+      const validatedData = insertDealSchema.partial().parse(req.body);
+      const deal = await storage.updateDeal(req.params.id, validatedData);
+      if (!deal) {
+        return res.status(404).json({ error: "Deal not found" });
+      }
+
+      if (deal.leadId) {
+        await storage.createActivity({
+          leadId: deal.leadId,
+          type: "deal_updated",
+          description: `Deal "${deal.name}" was updated`,
+          metadata: { dealId: deal.id },
+        });
+      }
+
+      res.json(deal);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/deals/:id", async (req, res) => {
+    try {
+      await storage.deleteDeal(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/deals/:id/move-stage", async (req, res) => {
+    try {
+      const { toStageId, movedById } = req.body;
+      if (!toStageId) {
+        return res.status(400).json({ error: "toStageId is required" });
+      }
+
+      const deal = await storage.moveDealToStage(req.params.id, toStageId, movedById);
+      if (!deal) {
+        return res.status(404).json({ error: "Deal or stage not found" });
+      }
+
+      if (deal.leadId) {
+        const stage = await storage.getStage(toStageId);
+        await storage.createActivity({
+          leadId: deal.leadId,
+          type: "deal_stage_changed",
+          description: `Deal "${deal.name}" moved to ${stage?.name || 'new stage'}`,
+          metadata: { dealId: deal.id, stageId: toStageId },
+        });
+      }
+
+      res.json(deal);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/deals/:id/history", async (req, res) => {
+    try {
+      const history = await storage.getDealStageHistory(req.params.id);
+      res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Forecast route
+  app.get("/api/forecast", async (req, res) => {
+    try {
+      const pipelineId = req.query.pipelineId as string | undefined;
+      const ownerId = req.query.ownerId as string | undefined;
+      
+      const deals = await storage.getDeals({
+        pipelineId,
+        ownerId,
+        status: "open",
+      });
+
+      const forecast = {
+        totalValue: deals.reduce((sum, deal) => sum + deal.amount, 0),
+        weightedValue: deals.reduce((sum, deal) => sum + (deal.amount * (deal.probability || 0) / 100), 0),
+        dealCount: deals.length,
+        avgDealSize: deals.length > 0 ? deals.reduce((sum, deal) => sum + deal.amount, 0) / deals.length : 0,
+        byStage: {} as Record<string, { count: number; totalValue: number; weightedValue: number }>,
+      };
+
+      // Group by stage
+      for (const deal of deals) {
+        if (!forecast.byStage[deal.stageId]) {
+          forecast.byStage[deal.stageId] = {
+            count: 0,
+            totalValue: 0,
+            weightedValue: 0,
+          };
+        }
+        forecast.byStage[deal.stageId].count++;
+        forecast.byStage[deal.stageId].totalValue += deal.amount;
+        forecast.byStage[deal.stageId].weightedValue += deal.amount * (deal.probability || 0) / 100;
+      }
+
+      res.json(forecast);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
