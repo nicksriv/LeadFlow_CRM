@@ -41,6 +41,7 @@ export default function App() {
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
+    "--sidebar-width-mobile": "18rem",
   };
 
   return (
@@ -51,17 +52,19 @@ export default function App() {
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex flex-col flex-1 overflow-hidden">
-                <header className="flex items-center justify-between px-6 py-3 border-b gap-4">
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b gap-2 sm:gap-4">
+                  <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                     <SidebarTrigger data-testid="button-sidebar-toggle" />
-                    <Breadcrumbs />
+                    <div className="hidden md:block">
+                      <Breadcrumbs />
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <QuickActions />
                     <ThemeToggle />
                   </div>
                 </header>
-                <main className="flex-1 overflow-auto p-6">
+                <main className="flex-1 overflow-auto p-4 sm:p-6">
                   <Router />
                 </main>
               </div>
