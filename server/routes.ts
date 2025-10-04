@@ -14,7 +14,7 @@ import {
   insertDealSchema,
   insertAutomationRuleSchema,
 } from "@shared/schema";
-import { analyzeLeadConversations, summarizeConversations, draftEmailResponse } from "./ai";
+import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, generateNextBestAction } from "./ai";
 import { ms365Integration } from "./ms365";
 import { automationEngine } from "./automation";
 
@@ -239,6 +239,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const draft = await draftEmailResponse(lead.name, conversationHistory, responseType);
       
       res.json(draft);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI Next Best Action
+  app.get("/api/leads/:id/next-best-action", async (req, res) => {
+    try {
+      const lead = await storage.getLead(req.params.id);
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+
+      const [conversations, activities, tasks, leadScores] = await Promise.all([
+        storage.getConversationsByLeadId(req.params.id),
+        storage.getActivities(req.params.id),
+        storage.getTasks(req.params.id),
+        storage.getLeadScores(req.params.id),
+      ]);
+
+      const latestScore = leadScores.length > 0 
+        ? leadScores.sort((a, b) => new Date(b.analyzedAt).getTime() - new Date(a.analyzedAt).getTime())[0]
+        : null;
+
+      const openTasks = tasks.filter((t: any) => t.status !== "completed");
+
+      const nextAction = await generateNextBestAction(
+        {
+          name: lead.name,
+          email: lead.email,
+          company: lead.company || "Unknown",
+          score: latestScore?.score || 0,
+          status: (latestScore?.status as "hot" | "warm" | "cold") || "cold",
+        },
+        conversations.map(c => ({
+          subject: c.subject,
+          body: c.body,
+          isFromLead: Boolean(c.isFromLead),
+          sentAt: c.sentAt,
+        })),
+        activities.slice(0, 10),
+        openTasks
+      );
+
+      res.json(nextAction);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

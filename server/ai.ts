@@ -23,6 +23,14 @@ export interface ConversationSummary {
   nextSteps: string;
 }
 
+export interface NextBestAction {
+  action: string;
+  priority: "high" | "medium" | "low";
+  reason: string;
+  suggestedMessage?: string;
+  estimatedImpact: string;
+}
+
 export async function analyzeLeadConversations(
   leadName: string,
   leadEmail: string,
@@ -281,6 +289,132 @@ Task: ${prompts[responseType]}`,
     return {
       subject: `Following up - ${leadName}`,
       body: `Hi ${leadName},\n\nI wanted to follow up on our previous conversation.\n\nLooking forward to hearing from you.\n\nBest regards`,
+    };
+  }
+}
+
+/**
+ * Generate next-best-action recommendation for a lead
+ */
+export async function generateNextBestAction(
+  leadData: {
+    name: string;
+    email: string;
+    company: string;
+    score: number;
+    status: string;
+  },
+  conversations: Array<{
+    subject: string;
+    body: string;
+    isFromLead: boolean;
+    sentAt: Date;
+  }>,
+  recentActivities: Array<{
+    type: string;
+    description: string;
+    createdAt: Date;
+  }>,
+  openTasks: Array<{
+    title: string;
+    priority: string;
+    dueDate: Date | null;
+  }>
+): Promise<NextBestAction> {
+  const lastConversation = conversations.length > 0
+    ? conversations[conversations.length - 1]
+    : null;
+
+  const daysSinceLastContact = lastConversation
+    ? Math.floor((Date.now() - new Date(lastConversation.sentAt).getTime()) / (1000 * 60 * 60 * 24))
+    : 999;
+
+  const conversationSummary = conversations.slice(-3)
+    .map((c) => {
+      const dir = c.isFromLead ? "Lead" : "Sales";
+      return `${dir}: ${c.subject}`;
+    })
+    .join(", ");
+
+  const activitiesSummary = recentActivities.slice(0, 5)
+    .map((a) => `${a.type}: ${a.description}`)
+    .join(", ");
+
+  const tasksSummary = openTasks
+    .map((t) => `${t.priority} priority: ${t.title}`)
+    .join(", ");
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert sales strategist. Analyze a lead's current state and recommend the single most impactful next action.
+
+Available actions:
+- send_email: Send a personalized email
+- schedule_call: Schedule a phone/video call
+- send_proposal: Create and send a proposal
+- convert_to_deal: Move lead to sales pipeline
+- create_task: Create a follow-up task
+- nurture: Add to nurture campaign
+- close_lost: Mark as lost opportunity
+- escalate: Escalate to manager
+- send_demo: Offer product demo
+
+Consider:
+- Lead score and engagement level
+- Days since last contact
+- Conversation sentiment and content
+- Open tasks and commitments
+- Stage in buyer journey
+
+Respond with JSON:
+{
+  "action": "action name from the list above",
+  "priority": "high" | "medium" | "low",
+  "reason": "Clear explanation why this is the best action",
+  "suggestedMessage": "Optional: Brief suggested message or talking points",
+  "estimatedImpact": "Predicted impact on conversion likelihood"
+}`,
+        },
+        {
+          role: "user",
+          content: `Recommend next action for this lead:
+
+Lead: ${leadData.name} (${leadData.email}) at ${leadData.company}
+Score: ${leadData.score}/100 (${leadData.status})
+Days since last contact: ${daysSinceLastContact}
+
+Recent conversations: ${conversationSummary || "None"}
+Recent activities: ${activitiesSummary || "None"}
+Open tasks: ${tasksSummary || "None"}
+
+What should we do next?`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1024,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+
+    return {
+      action: result.action || "send_email",
+      priority: ["high", "medium", "low"].includes(result.priority) ? result.priority : "medium",
+      reason: result.reason || "Follow up with the lead to maintain engagement",
+      suggestedMessage: result.suggestedMessage,
+      estimatedImpact: result.estimatedImpact || "Moderate impact expected",
+    };
+  } catch (error) {
+    console.error("Error generating next best action:", error);
+    return {
+      action: "send_email",
+      priority: "medium",
+      reason: "Send a follow-up email to re-engage the lead",
+      suggestedMessage: "Check in on their interest and offer to answer any questions",
+      estimatedImpact: "Maintains relationship and keeps lead warm",
     };
   }
 }
