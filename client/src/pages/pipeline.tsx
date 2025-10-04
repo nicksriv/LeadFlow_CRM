@@ -7,12 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, DollarSign, Calendar, User, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Deal, Pipeline as PipelineType, PipelineStage, User as UserType } from "@shared/schema";
+import type { Deal, Pipeline as PipelineType, PipelineStage, User as UserType, InsertDeal } from "@shared/schema";
+import { insertDealSchema } from "@shared/schema";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 function DealCard({ deal, stage }: { deal: Deal; stage: PipelineStage }) {
   const [, navigate] = useLocation();
@@ -132,6 +139,7 @@ export default function Pipeline() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
   const [selectedOwner, setSelectedOwner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [isNewDealOpen, setIsNewDealOpen] = useState(false);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -258,7 +266,7 @@ export default function Pipeline() {
               Manage your deals through the sales pipeline
             </p>
           </div>
-          <Button data-testid="button-create-deal">
+          <Button onClick={() => setIsNewDealOpen(true)} data-testid="button-create-deal">
             <Plus className="h-4 w-4 mr-2" />
             New Deal
           </Button>
@@ -323,6 +331,221 @@ export default function Pipeline() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      <NewDealDialog
+        open={isNewDealOpen}
+        onOpenChange={setIsNewDealOpen}
+        pipeline={currentPipeline}
+        stages={stages}
+        users={users}
+      />
     </div>
+  );
+}
+
+function NewDealDialog({
+  open,
+  onOpenChange,
+  pipeline,
+  stages,
+  users,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  pipeline?: PipelineType;
+  stages: PipelineStage[];
+  users: UserType[];
+}) {
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const firstStage = stages[0];
+
+  const form = useForm<InsertDeal>({
+    resolver: zodResolver(insertDealSchema),
+    defaultValues: {
+      name: "",
+      pipelineId: pipeline?.id || "",
+      stageId: firstStage?.id || "",
+      amount: 0,
+      probability: 10,
+      expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      ownerId: users[0]?.id || "",
+      status: "open",
+      description: "",
+    },
+  });
+
+  const createDealMutation = useMutation({
+    mutationFn: async (data: InsertDeal) => {
+      const response = await apiRequest("POST", "/api/deals", data);
+      return response.json();
+    },
+    onSuccess: (deal) => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/deals');
+        }
+      });
+      toast({
+        title: "Deal created",
+        description: `Successfully created ${deal.name}`,
+      });
+      form.reset();
+      onOpenChange(false);
+      navigate(`/deals/${deal.id}`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create deal",
+        description: error?.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Deal</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => {
+            const dealData = {
+              ...data,
+              stageId: data.stageId || firstStage?.id || stages[0]?.id,
+              pipelineId: data.pipelineId || pipeline?.id,
+              expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : undefined,
+            };
+            createDealMutation.mutate(dealData);
+          })} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Deal Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Acme Corp - Enterprise Plan" data-testid="input-new-deal-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount ($)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        data-testid="input-new-deal-amount"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="probability"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Probability (%)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        data-testid="input-new-deal-probability"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="ownerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Owner</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-new-deal-owner">
+                        <SelectValue placeholder="Select owner" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="expectedCloseDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Expected Close Date</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      {...field}
+                      value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
+                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                      data-testid="input-new-deal-close-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} value={field.value || ""} rows={3} data-testid="input-new-deal-description" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-new-deal">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createDealMutation.isPending} data-testid="button-submit-new-deal">
+                {createDealMutation.isPending ? "Creating..." : "Create Deal"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
