@@ -15,6 +15,7 @@ import Leads from "@/pages/leads";
 import LeadDetail from "@/pages/lead-detail";
 import Conversations from "@/pages/conversations";
 import Pipeline from "@/pages/pipeline";
+import DealDetail from "@/pages/deal-detail";
 import Tasks from "@/pages/tasks";
 import Team from "@/pages/team";
 import Analytics from "@/pages/analytics";
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/leads/:id" component={LeadDetail} />
       <Route path="/conversations" component={Conversations} />
       <Route path="/pipeline" component={Pipeline} />
+      <Route path="/deals/:id" component={DealDetail} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/team" component={Team} />
       <Route path="/analytics" component={Analytics} />

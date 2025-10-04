@@ -12,8 +12,10 @@ import type { Deal, Pipeline as PipelineType, PipelineStage, User as UserType } 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 function DealCard({ deal, stage }: { deal: Deal; stage: PipelineStage }) {
+  const [, navigate] = useLocation();
   const {
     attributes,
     listeners,
@@ -31,9 +33,19 @@ function DealCard({ deal, stage }: { deal: Deal; stage: PipelineStage }) {
 
   const amountColor = deal.amount >= 100000 ? "text-emerald-600" : deal.amount >= 50000 ? "text-blue-600" : "text-gray-600";
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isDragging) {
+      navigate(`/deals/${deal.id}`);
+    }
+  };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card className="cursor-move hover-elevate active-elevate-2" data-testid={`card-deal-${deal.id}`}>
+      <Card 
+        className="cursor-move hover-elevate active-elevate-2" 
+        data-testid={`card-deal-${deal.id}`}
+        onClick={handleClick}
+      >
         <CardHeader className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-sm leading-tight" data-testid={`text-deal-name-${deal.id}`}>{deal.name}</h3>
@@ -138,15 +150,28 @@ export default function Pipeline() {
     queryKey: ["/api/users"],
   });
 
-  const currentPipelineId = selectedPipeline || pipelines.find(p => p.isDefault === 1)?.id || pipelines[0]?.id;
+  // Set default pipeline when pipelines load
+  const defaultPipeline = pipelines.find(p => p.isDefault === 1) || pipelines[0];
+  const currentPipelineId = selectedPipeline || defaultPipeline?.id;
 
   const { data: stages = [] } = useQuery<PipelineStage[]>({
-    queryKey: ["/api/pipelines", currentPipelineId, "stages"],
+    queryKey: [`/api/pipelines/${currentPipelineId}/stages`],
     enabled: !!currentPipelineId,
   });
 
+  // Build query URL with params
+  const buildDealsQueryKey = () => {
+    if (!currentPipelineId) return ["/api/deals"];
+    const params = new URLSearchParams();
+    params.set("pipelineId", currentPipelineId);
+    if (selectedOwner !== "all") {
+      params.set("ownerId", selectedOwner);
+    }
+    return [`/api/deals?${params.toString()}`];
+  };
+
   const { data: allDeals = [] } = useQuery<Deal[]>({
-    queryKey: ["/api/deals", { pipelineId: currentPipelineId, ownerId: selectedOwner === "all" ? undefined : selectedOwner }],
+    queryKey: buildDealsQueryKey(),
     enabled: !!currentPipelineId,
   });
 
@@ -155,7 +180,13 @@ export default function Pipeline() {
       return apiRequest("POST", `/api/deals/${dealId}/move-stage`, { toStageId });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      // Invalidate all deals queries that start with /api/deals
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/deals');
+        }
+      });
       toast({
         title: "Deal moved",
         description: `${variables.dealName} moved to ${variables.stageName}`,
