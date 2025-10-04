@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Leads from "@/pages/leads";
@@ -49,8 +50,11 @@ export default function App() {
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex flex-col flex-1 overflow-hidden">
-                <header className="flex items-center justify-between px-6 py-3 border-b">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                <header className="flex items-center justify-between px-6 py-3 border-b gap-4">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    <Breadcrumbs />
+                  </div>
                   <ThemeToggle />
                 </header>
                 <main className="flex-1 overflow-auto p-6">
