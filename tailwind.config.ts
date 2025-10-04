@@ -80,6 +80,9 @@ export default {
           away: "rgb(245 158 11)",
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
+          cold: "hsl(var(--status-cold) / <alpha-value>)",
+          warm: "hsl(var(--status-warm) / <alpha-value>)",
+          hot: "hsl(var(--status-hot) / <alpha-value>)",
         },
       },
       fontFamily: {
