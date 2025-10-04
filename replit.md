@@ -5,6 +5,7 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 
 ## Features
 - **Lead Management**: Complete CRUD operations for managing leads with detailed information
+- **Pipeline/Deal Management**: Full-featured Kanban board for managing sales pipeline with drag-and-drop
 - **AI-Powered Scoring**: Automatic lead scoring (0-100) using OpenAI to analyze email conversations
 - **Status Classification**: Intelligent categorization into Cold (0-33), Warm (34-66), and Hot (67-100) leads
 - **Email Sending**: Send emails directly from CRM with email template support
@@ -12,7 +13,7 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 - **MS 365 Integration**: Sync email conversations from Microsoft 365 mailbox
 - **Conversation Tracking**: View all email threads associated with each lead
 - **Task Management**: Create tasks and follow-up reminders for each lead
-- **Activity Timeline**: Comprehensive activity log for all lead interactions
+- **Activity Timeline**: Comprehensive activity log for all lead and deal interactions
 - **Advanced Scoring Configuration**: Customizable weighted criteria for AI scoring algorithm
 - **Analytics Dashboard**: Insights into lead pipeline performance and conversion metrics
 - **Dark Mode**: Full dark mode support throughout the application
