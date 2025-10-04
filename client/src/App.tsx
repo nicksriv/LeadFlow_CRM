@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { QuickActions } from "@/components/quick-actions";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Leads from "@/pages/leads";
@@ -55,7 +56,10 @@ export default function App() {
                     <SidebarTrigger data-testid="button-sidebar-toggle" />
                     <Breadcrumbs />
                   </div>
-                  <ThemeToggle />
+                  <div className="flex items-center gap-2">
+                    <QuickActions />
+                    <ThemeToggle />
+                  </div>
                 </header>
                 <main className="flex-1 overflow-auto p-6">
                   <Router />
