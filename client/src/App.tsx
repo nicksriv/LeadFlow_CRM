@@ -14,6 +14,7 @@ import Dashboard from "@/pages/dashboard";
 import Leads from "@/pages/leads";
 import LeadDetail from "@/pages/lead-detail";
 import Conversations from "@/pages/conversations";
+import Pipeline from "@/pages/pipeline";
 import Tasks from "@/pages/tasks";
 import Team from "@/pages/team";
 import Analytics from "@/pages/analytics";
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/leads" component={Leads} />
       <Route path="/leads/:id" component={LeadDetail} />
       <Route path="/conversations" component={Conversations} />
+      <Route path="/pipeline" component={Pipeline} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/team" component={Team} />
       <Route path="/analytics" component={Analytics} />

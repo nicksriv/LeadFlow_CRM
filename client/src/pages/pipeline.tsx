@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, DollarSign, Calendar, User } from "lucide-react";
+import { Plus, DollarSign, Calendar, User, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Deal, Pipeline as PipelineType, PipelineStage, User as UserType } from "@shared/schema";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useToast } from "@/hooks/use-toast";
 
 function DealCard({ deal, stage }: { deal: Deal; stage: PipelineStage }) {
   const {
@@ -70,6 +71,10 @@ function StageColumn({ stage, deals, pipeline }: { stage: PipelineStage; deals: 
   const totalValue = stageDeals.reduce((sum, deal) => sum + deal.amount, 0);
   const weightedValue = stageDeals.reduce((sum, deal) => sum + (deal.amount * (deal.probability || 0) / 100), 0);
 
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+  });
+
   return (
     <div className="flex flex-col min-w-[320px] max-w-[320px]" data-testid={`column-stage-${stage.id}`}>
       <div className="flex flex-col gap-1 mb-3">
@@ -91,13 +96,18 @@ function StageColumn({ stage, deals, pipeline }: { stage: PipelineStage; deals: 
       </div>
 
       <SortableContext items={stageDeals.map(d => d.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-3 p-3 bg-muted/30 rounded-lg min-h-[200px]">
+        <div 
+          ref={setNodeRef}
+          className={`flex flex-col gap-3 p-3 bg-muted/30 rounded-lg min-h-[200px] transition-colors ${
+            isOver ? "bg-muted/50 ring-2 ring-primary/20" : ""
+          }`}
+        >
           {stageDeals.map(deal => (
             <DealCard key={deal.id} deal={deal} stage={stage} />
           ))}
           {stageDeals.length === 0 && (
             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground" data-testid={`empty-stage-${stage.id}`}>
-              No deals in this stage
+              {isOver ? "Drop deal here" : "No deals in this stage"}
             </div>
           )}
         </div>
@@ -110,6 +120,7 @@ export default function Pipeline() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
   const [selectedOwner, setSelectedOwner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -140,11 +151,22 @@ export default function Pipeline() {
   });
 
   const moveDealMutation = useMutation({
-    mutationFn: async ({ dealId, toStageId }: { dealId: string; toStageId: string }) => {
+    mutationFn: async ({ dealId, toStageId, dealName, stageName }: { dealId: string; toStageId: string; dealName: string; stageName: string }) => {
       return apiRequest("POST", `/api/deals/${dealId}/move-stage`, { toStageId });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      toast({
+        title: "Deal moved",
+        description: `${variables.dealName} moved to ${variables.stageName}`,
+      });
+    },
+    onError: (error: any, variables) => {
+      toast({
+        title: "Failed to move deal",
+        description: error?.message || "An error occurred while moving the deal",
+        variant: "destructive",
+      });
     },
   });
 
@@ -159,19 +181,32 @@ export default function Pipeline() {
     if (!over) return;
 
     const dealId = active.id as string;
-    const overId = over.id as string;
-
     const deal = allDeals.find(d => d.id === dealId);
     if (!deal) return;
 
-    const overDeal = allDeals.find(d => d.id === overId);
-    const targetStageId = overDeal?.stageId || overId;
+    // Determine target stage: either dropped on another deal or directly on a stage column
+    let targetStageId: string;
+    const overDeal = allDeals.find(d => d.id === over.id);
+    
+    if (overDeal) {
+      // Dropped on another deal - use that deal's stage
+      targetStageId = overDeal.stageId;
+    } else {
+      // Dropped on a stage column directly
+      targetStageId = over.id as string;
+    }
 
     const targetStage = stages.find(s => s.id === targetStageId);
     if (!targetStage) return;
 
+    // Only move if changing stages
     if (deal.stageId !== targetStage.id) {
-      moveDealMutation.mutate({ dealId, toStageId: targetStage.id });
+      moveDealMutation.mutate({ 
+        dealId, 
+        toStageId: targetStage.id,
+        dealName: deal.name,
+        stageName: targetStage.name,
+      });
     }
   };
 
