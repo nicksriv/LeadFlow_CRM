@@ -16,29 +16,29 @@ interface StatCardProps {
 export function StatCard({ title, value, icon: Icon, trend, description, color = "primary" }: StatCardProps) {
   const colorVariants = {
     primary: {
-      iconBg: "bg-primary/10",
+      iconBg: "bg-primary/15",
       iconColor: "text-primary",
-      gradient: "from-primary/5 to-transparent"
+      gradient: "from-primary/10 to-transparent"
     },
     success: {
-      iconBg: "bg-success/10",
+      iconBg: "bg-success/15",
       iconColor: "text-success",
-      gradient: "from-success/5 to-transparent"
+      gradient: "from-success/10 to-transparent"
     },
     warning: {
-      iconBg: "bg-warning/10",
+      iconBg: "bg-warning/15",
       iconColor: "text-warning",
-      gradient: "from-warning/5 to-transparent"
+      gradient: "from-warning/10 to-transparent"
     },
     info: {
-      iconBg: "bg-info/10",
+      iconBg: "bg-info/15",
       iconColor: "text-info",
-      gradient: "from-info/5 to-transparent"
+      gradient: "from-info/10 to-transparent"
     },
     destructive: {
-      iconBg: "bg-destructive/10",
+      iconBg: "bg-destructive/15",
       iconColor: "text-destructive",
-      gradient: "from-destructive/5 to-transparent"
+      gradient: "from-destructive/10 to-transparent"
     }
   };
 
