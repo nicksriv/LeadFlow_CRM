@@ -37,6 +37,25 @@ export default function Settings() {
     },
   });
 
+  const connectMS365Mutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/ms365/auth-url");
+      const data = await response.json();
+      return data.authUrl;
+    },
+    onSuccess: (authUrl) => {
+      // Redirect to Microsoft OAuth page
+      window.location.href = authUrl;
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Connection failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const isConfigured = syncState?.isConfigured === 1;
 
   return (
@@ -98,9 +117,13 @@ export default function Settings() {
 
               <div className="flex gap-3">
                 {!isConfigured ? (
-                  <Button data-testid="button-configure-ms365">
+                  <Button 
+                    onClick={() => connectMS365Mutation.mutate()}
+                    disabled={connectMS365Mutation.isPending}
+                    data-testid="button-configure-ms365"
+                  >
                     <Link2 className="h-4 w-4 mr-2" />
-                    Configure MS 365
+                    {connectMS365Mutation.isPending ? "Connecting..." : "Connect MS 365"}
                   </Button>
                 ) : (
                   <Button

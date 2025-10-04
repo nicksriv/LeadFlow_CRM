@@ -72,23 +72,78 @@ export class MS365Integration {
     refreshToken: string;
     expiresIn: number;
   }> {
-    // Placeholder - in production, implement actual OAuth flow
-    console.log("MS365: Would exchange auth code for tokens");
+    const tokenUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/token`;
     
-    return {
-      accessToken: "placeholder_access_token",
-      refreshToken: "placeholder_refresh_token",
-      expiresIn: 3600,
-    };
+    const params = new URLSearchParams({
+      client_id: this.config.clientId,
+      client_secret: this.config.clientSecret,
+      code: authCode,
+      redirect_uri: this.config.redirectUri,
+      grant_type: "authorization_code",
+      scope: "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite offline_access",
+    });
+
+    try {
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Token exchange failed: ${error}`);
+      }
+
+      const data = await response.json();
+      
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresIn: data.expires_in,
+      };
+    } catch (error) {
+      console.error("MS365: Token exchange failed:", error);
+      throw error;
+    }
   }
 
   /**
    * Refresh expired access token using refresh token
    */
   async refreshAccessToken(refreshToken: string): Promise<string> {
-    // Placeholder - in production, implement token refresh
-    console.log("MS365: Would refresh access token");
-    return "refreshed_access_token";
+    const tokenUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/token`;
+    
+    const params = new URLSearchParams({
+      client_id: this.config.clientId,
+      client_secret: this.config.clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+      scope: "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite offline_access",
+    });
+
+    try {
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Token refresh failed: ${error}`);
+      }
+
+      const data = await response.json();
+      return data.access_token;
+    } catch (error) {
+      console.error("MS365: Token refresh failed:", error);
+      throw error;
+    }
   }
 
   /**
@@ -104,17 +159,44 @@ export class MS365Integration {
     emails: EmailMessage[];
     nextDeltaToken: string;
   }> {
-    // Placeholder - in production, call Microsoft Graph API
-    console.log("MS365: Would fetch emails from Graph API");
-    
-    // In production, this would make requests to:
-    // GET https://graph.microsoft.com/v1.0/me/messages/delta
-    // With Authorization: Bearer {accessToken}
-    
-    return {
-      emails: [],
-      nextDeltaToken: deltaToken || "placeholder_delta_token",
-    };
+    const baseUrl = deltaToken || "https://graph.microsoft.com/v1.0/me/messages/delta";
+    const url = deltaToken ? deltaToken : `${baseUrl}?$top=50&$select=id,subject,body,from,toRecipients,sentDateTime,isRead`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to fetch emails: ${error}`);
+      }
+
+      const data = await response.json();
+      const emails: EmailMessage[] = data.value.map((msg: any) => ({
+        id: msg.id,
+        subject: msg.subject || "(No Subject)",
+        body: msg.body?.content || "",
+        from: msg.from?.emailAddress?.address || "",
+        to: msg.toRecipients?.[0]?.emailAddress?.address || "",
+        sentDateTime: msg.sentDateTime,
+        isRead: msg.isRead,
+      }));
+
+      // Extract delta link for next sync
+      const nextDeltaToken = data["@odata.deltaLink"] || data["@odata.nextLink"] || deltaToken || "";
+
+      return {
+        emails,
+        nextDeltaToken,
+      };
+    } catch (error) {
+      console.error("MS365: Failed to fetch emails:", error);
+      throw error;
+    }
   }
 
   /**
@@ -206,22 +288,46 @@ export class MS365Integration {
    * Uses Microsoft Graph subscriptions API to receive notifications
    * when new emails arrive, instead of polling
    */
-  async setupWebhook(callbackUrl: string): Promise<{ subscriptionId: string }> {
-    console.log("MS365: Would setup webhook for real-time notifications");
+  async setupWebhook(callbackUrl: string, accessToken: string): Promise<{ subscriptionId: string }> {
+    const url = "https://graph.microsoft.com/v1.0/subscriptions";
     
-    // In production, POST to:
-    // https://graph.microsoft.com/v1.0/subscriptions
-    // {
-    //   "changeType": "created",
-    //   "notificationUrl": callbackUrl,
-    //   "resource": "/me/messages",
-    //   "expirationDateTime": "...",
-    //   "clientState": "secretClientState"
-    // }
+    // Subscriptions expire after max 3 days for user mailbox resources
+    const expirationDateTime = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
     
-    return {
-      subscriptionId: "placeholder_subscription_id",
+    const payload = {
+      changeType: "created",
+      notificationUrl: callbackUrl,
+      resource: "/me/messages",
+      expirationDateTime,
+      clientState: process.env.MS365_WEBHOOK_SECRET || "webhook_secret_" + Date.now(),
     };
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to setup webhook: ${error}`);
+      }
+
+      const data = await response.json();
+      
+      console.log(`MS365: Webhook subscription created: ${data.id}, expires: ${expirationDateTime}`);
+      
+      return {
+        subscriptionId: data.id,
+      };
+    } catch (error) {
+      console.error("MS365: Failed to setup webhook:", error);
+      throw error;
+    }
   }
 
   /**
@@ -235,42 +341,119 @@ export class MS365Integration {
     body: string;
     accessToken: string;
   }): Promise<{ success: boolean; messageId?: string }> {
-    console.log(`MS365: Would send email to ${params.to}: "${params.subject}"`);
+    const url = "https://graph.microsoft.com/v1.0/me/sendMail";
     
-    // In production, POST to:
-    // https://graph.microsoft.com/v1.0/me/sendMail
-    // {
-    //   "message": {
-    //     "subject": params.subject,
-    //     "body": {
-    //       "contentType": "HTML",
-    //       "content": params.body
-    //     },
-    //     "toRecipients": [
-    //       { "emailAddress": { "address": params.to } }
-    //     ]
-    //   }
-    // }
-    
-    // Simulate successful send
-    return {
-      success: true,
-      messageId: `msg_${Date.now()}`,
+    const payload = {
+      message: {
+        subject: params.subject,
+        body: {
+          contentType: "HTML",
+          content: params.body,
+        },
+        toRecipients: [
+          {
+            emailAddress: {
+              address: params.to,
+            },
+          },
+        ],
+      },
+      saveToSentItems: true,
     };
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to send email: ${error}`);
+      }
+
+      return {
+        success: true,
+        messageId: `sent_${Date.now()}`,
+      };
+    } catch (error) {
+      console.error("MS365: Failed to send email:", error);
+      throw error;
+    }
   }
 
   /**
    * Handle webhook notification from MS 365
    */
-  async handleWebhookNotification(notification: any): Promise<void> {
+  async handleWebhookNotification(notification: any, accessToken: string): Promise<void> {
     console.log("MS365: Received webhook notification", notification);
     
-    // In production:
-    // 1. Validate notification signature
-    // 2. Extract message ID from notification
-    // 3. Fetch full message details
-    // 4. Match with lead and create conversation
-    // 5. Trigger AI scoring
+    // Validate clientState matches what we sent
+    const expectedClientState = process.env.MS365_WEBHOOK_SECRET;
+    if (notification.clientState && notification.clientState !== expectedClientState) {
+      console.warn("MS365: Invalid clientState in webhook notification");
+      return;
+    }
+
+    // Extract resource data from notification
+    const resourceData = notification.resourceData;
+    if (!resourceData || !resourceData.id) {
+      console.warn("MS365: No resource data in notification");
+      return;
+    }
+
+    const messageId = resourceData.id;
+
+    try {
+      // Fetch full message details from Graph API
+      const messageUrl = `https://graph.microsoft.com/v1.0/me/messages/${messageId}`;
+      const response = await fetch(messageUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch message details");
+      }
+
+      const message = await response.json();
+      
+      // Extract email data
+      const fromEmail = message.from?.emailAddress?.address;
+      if (!fromEmail) return;
+
+      // Match with lead
+      const leads = await storage.getLeads();
+      const matchedLead = leads.find((l) => 
+        l.email.toLowerCase() === fromEmail.toLowerCase()
+      );
+
+      if (matchedLead) {
+        // Create conversation record
+        await storage.createConversation({
+          leadId: matchedLead.id,
+          subject: message.subject || "(No Subject)",
+          body: message.body?.content || "",
+          fromEmail,
+          toEmail: message.toRecipients?.[0]?.emailAddress?.address || "",
+          sentAt: new Date(message.sentDateTime),
+          isFromLead: 1,
+          messageId: message.id,
+        });
+
+        console.log(`MS365: Created conversation for lead ${matchedLead.id} from webhook`);
+        
+        // TODO: Trigger AI scoring in background
+      }
+    } catch (error) {
+      console.error("MS365: Failed to handle webhook notification:", error);
+    }
   }
 }
 

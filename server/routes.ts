@@ -258,6 +258,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/ms365/callback", async (req, res) => {
+    try {
+      const authCode = req.query.code as string;
+      if (!authCode) {
+        return res.status(400).json({ error: "Missing authorization code" });
+      }
+
+      // Exchange code for tokens
+      const tokens = await ms365Integration.exchangeCodeForToken(authCode);
+
+      // Store tokens in sync state
+      await storage.updateSyncState({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiry: new Date(Date.now() + tokens.expiresIn * 1000),
+        isConfigured: 1,
+      });
+
+      // Setup webhook for real-time notifications
+      const webhookUrl = `${process.env.REPL_SLUG ? 'https://' + process.env.REPL_SLUG + '.replit.app' : 'http://localhost:5000'}/api/ms365/webhook`;
+      try {
+        const webhook = await ms365Integration.setupWebhook(webhookUrl, tokens.accessToken);
+        console.log(`MS365: Webhook setup successful: ${webhook.subscriptionId}`);
+      } catch (error) {
+        console.warn("MS365: Failed to setup webhook (will use polling):", error);
+      }
+
+      // Redirect to settings page with success message
+      res.redirect('/settings?ms365=connected');
+    } catch (error: any) {
+      console.error("MS365: OAuth callback failed:", error);
+      res.redirect('/settings?ms365=error&message=' + encodeURIComponent(error.message));
+    }
+  });
+
+  app.post("/api/ms365/webhook", async (req, res) => {
+    try {
+      const validationToken = req.query.validationToken as string;
+      
+      // Microsoft Graph validation request
+      if (validationToken) {
+        return res.send(validationToken);
+      }
+
+      // Handle webhook notification
+      const notification = req.body.value?.[0];
+      if (notification) {
+        const syncState = await storage.getSyncState();
+        if (syncState?.accessToken) {
+          await ms365Integration.handleWebhookNotification(notification, syncState.accessToken);
+        }
+      }
+
+      res.status(202).send();
+    } catch (error: any) {
+      console.error("MS365: Webhook handling failed:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Email Template routes
   app.get("/api/email-templates", async (req, res) => {
     try {
