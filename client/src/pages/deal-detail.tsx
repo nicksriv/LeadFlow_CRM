@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Edit, DollarSign, Calendar, User, TrendingUp, History, MessageSquare, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Edit, DollarSign, Calendar, User, TrendingUp, History, MessageSquare, CheckCircle2, Sparkles, Target, AlertCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Deal, Activity, User as UserType, PipelineStage } from "@shared/schema";
 import { format } from "date-fns";
@@ -287,6 +287,22 @@ export default function DealDetail() {
     queryKey: ["/api/users"],
   });
 
+  const { data: dealForecast } = useQuery<{
+    winProbability: number;
+    lossProbability: number;
+    outcome: "likely_win" | "uncertain" | "likely_loss";
+    confidence: "high" | "medium" | "low";
+    keyFactors: {
+      positive: string[];
+      negative: string[];
+    };
+    recommendations: string[];
+    estimatedCloseDate: string | null;
+  }>({
+    queryKey: [`/api/deals/${id}/forecast`],
+    enabled: !!id && deal?.status === "open",
+  });
+
   const currentStage = stages.find((s) => s.id === deal?.stageId);
   const owner = users.find((u) => u.id === deal?.ownerId);
 
@@ -419,6 +435,103 @@ export default function DealDetail() {
                 )}
               </CardContent>
             </Card>
+
+            {dealForecast && deal.status === "open" && (
+              <Card data-testid="card-deal-forecast">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-purple-600" />
+                    AI Forecast
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">Outcome Prediction</div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={
+                          dealForecast.outcome === "likely_win" ? "default" :
+                          dealForecast.outcome === "likely_loss" ? "destructive" :
+                          "secondary"
+                        } className="text-sm">
+                          {dealForecast.outcome === "likely_win" && <ThumbsUp className="h-3 w-3 mr-1" />}
+                          {dealForecast.outcome === "likely_loss" && <ThumbsDown className="h-3 w-3 mr-1" />}
+                          {dealForecast.outcome === "uncertain" && <Target className="h-3 w-3 mr-1" />}
+                          {dealForecast.outcome.replace(/_/g, " ")}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {dealForecast.confidence} confidence
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <div className="text-sm text-muted-foreground">Win Probability</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {dealForecast.winProbability}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {dealForecast.keyFactors.positive.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5 text-green-600">
+                          <ThumbsUp className="h-4 w-4" />
+                          Positive Factors
+                        </h4>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {dealForecast.keyFactors.positive.map((factor, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5">
+                              <span className="text-green-600 mt-0.5">•</span>
+                              <span>{factor}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {dealForecast.keyFactors.negative.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5 text-red-600">
+                          <ThumbsDown className="h-4 w-4" />
+                          Risk Factors
+                        </h4>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {dealForecast.keyFactors.negative.map((factor, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5">
+                              <span className="text-red-600 mt-0.5">•</span>
+                              <span>{factor}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {dealForecast.recommendations.length > 0 && (
+                    <>
+                      <Separator />
+                      <div>
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                          <AlertCircle className="h-4 w-4" />
+                          Recommended Actions
+                        </h4>
+                        <ul className="text-sm text-muted-foreground space-y-1.5">
+                          {dealForecast.recommendations.map((rec, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5">
+                              <span className="text-primary mt-0.5">→</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>

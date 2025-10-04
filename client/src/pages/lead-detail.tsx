@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link, useLocation } from "wouter";
-import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp, Sparkles, Lightbulb, MessageSquare, Activity as ActivityIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
@@ -70,6 +70,40 @@ export default function LeadDetail() {
 
   const { data: users = [] } = useQuery<UserType[]>({
     queryKey: ["/api/users"],
+  });
+
+  // AI Features
+  const { data: conversationSummary } = useQuery<{
+    summary: string;
+    keyPoints: string[];
+    actionItems: string[];
+    sentiment: "positive" | "neutral" | "negative";
+    nextSteps: string;
+  }>({
+    queryKey: [`/api/leads/${leadId}/conversation-summary`],
+    enabled: !!leadId && (conversations?.length || 0) > 0,
+  });
+
+  const { data: nextBestAction } = useQuery<{
+    action: string;
+    priority: "high" | "medium" | "low";
+    reason: string;
+    suggestedMessage?: string;
+    estimatedImpact: string;
+  }>({
+    queryKey: [`/api/leads/${leadId}/next-best-action`],
+    enabled: !!leadId,
+  });
+
+  const { data: sentimentTimeline } = useQuery<Array<{
+    date: string;
+    sentiment: "positive" | "neutral" | "negative";
+    score: number;
+    summary: string;
+    conversationSubject: string;
+  }>>({
+    queryKey: [`/api/leads/${leadId}/sentiment-timeline`],
+    enabled: !!leadId && (conversations?.length || 0) > 0,
   });
 
   const deleteMutation = useMutation({
@@ -268,12 +302,16 @@ export default function LeadDetail() {
 
         <div className="lg:col-span-2">
           <Tabs defaultValue="conversations" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="conversations" data-testid="tab-conversations">
                 Conversations ({conversations?.length || 0})
               </TabsTrigger>
               <TabsTrigger value="tasks" data-testid="tab-tasks">
                 Tasks ({tasks?.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="ai-insights" data-testid="tab-ai-insights">
+                <Sparkles className="h-4 w-4 mr-1.5" />
+                AI Insights
               </TabsTrigger>
               <TabsTrigger value="activity" data-testid="tab-activity">
                 Activity ({activities?.length || 0})
@@ -373,6 +411,145 @@ export default function LeadDetail() {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="ai-insights" className="space-y-4 mt-6">
+              {!conversations || conversations.length === 0 ? (
+                <Card className="p-12">
+                  <div className="text-center text-muted-foreground">
+                    <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>AI insights will appear here once you have conversation data.</p>
+                  </div>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {/* Next Best Action */}
+                  {nextBestAction && (
+                    <Card data-testid="card-next-best-action">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Lightbulb className="h-5 w-5 text-yellow-600" />
+                          Recommended Action
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant={
+                              nextBestAction.priority === "high" ? "destructive" :
+                              nextBestAction.priority === "medium" ? "default" :
+                              "secondary"
+                            }>
+                              {nextBestAction.priority} priority
+                            </Badge>
+                            <Badge variant="outline">{nextBestAction.action.replace(/_/g, " ")}</Badge>
+                          </div>
+                          <p className="text-sm font-medium mb-1">{nextBestAction.reason}</p>
+                          {nextBestAction.suggestedMessage && (
+                            <p className="text-sm text-muted-foreground mt-2">
+                              <span className="font-medium">Suggested: </span>
+                              {nextBestAction.suggestedMessage}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Impact: {nextBestAction.estimatedImpact}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Conversation Summary */}
+                  {conversationSummary && (
+                    <Card data-testid="card-conversation-summary">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <MessageSquare className="h-5 w-5 text-blue-600" />
+                          Conversation Summary
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <p className="text-sm mb-3">{conversationSummary.summary}</p>
+                          
+                          {conversationSummary.keyPoints.length > 0 && (
+                            <div className="mb-3">
+                              <h4 className="text-sm font-medium mb-2">Key Points:</h4>
+                              <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                                {conversationSummary.keyPoints.map((point, idx) => (
+                                  <li key={idx}>{point}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {conversationSummary.actionItems.length > 0 && (
+                            <div className="mb-3">
+                              <h4 className="text-sm font-medium mb-2">Action Items:</h4>
+                              <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                                {conversationSummary.actionItems.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-2 border-t">
+                            <Badge variant={
+                              conversationSummary.sentiment === "positive" ? "default" :
+                              conversationSummary.sentiment === "negative" ? "destructive" :
+                              "secondary"
+                            }>
+                              {conversationSummary.sentiment} sentiment
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Sentiment Timeline */}
+                  {sentimentTimeline && sentimentTimeline.length > 0 && (
+                    <Card data-testid="card-sentiment-timeline">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <ActivityIcon className="h-5 w-5 text-purple-600" />
+                          Sentiment Timeline
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {sentimentTimeline.map((point, idx) => (
+                            <div key={idx} className="flex gap-3 pb-3 border-b last:border-0">
+                              <div className={`w-2 h-2 rounded-full mt-2 ${
+                                point.sentiment === "positive" ? "bg-green-500" :
+                                point.sentiment === "negative" ? "bg-red-500" :
+                                "bg-gray-400"
+                              }`} />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <p className="text-sm font-medium">{point.conversationSubject}</p>
+                                  <Badge variant={
+                                    point.sentiment === "positive" ? "default" :
+                                    point.sentiment === "negative" ? "destructive" :
+                                    "secondary"
+                                  } className="text-xs">
+                                    {point.score > 0 ? "+" : ""}{point.score}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{point.summary}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {formatDistanceToNow(new Date(point.date), { addSuffix: true })}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
             </TabsContent>
