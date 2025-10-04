@@ -911,6 +911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dealCount: deals.length,
         avgDealSize: deals.length > 0 ? deals.reduce((sum, deal) => sum + deal.amount, 0) / deals.length : 0,
         byStage: {} as Record<string, { count: number; totalValue: number; weightedValue: number }>,
+        byMonth: {} as Record<string, { count: number; totalValue: number; weightedValue: number }>,
       };
 
       // Group by stage
@@ -925,6 +926,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         forecast.byStage[deal.stageId].count++;
         forecast.byStage[deal.stageId].totalValue += deal.amount;
         forecast.byStage[deal.stageId].weightedValue += deal.amount * (deal.probability || 0) / 100;
+      }
+
+      // Group by month (based on expected close date)
+      for (const deal of deals) {
+        if (deal.expectedCloseDate) {
+          const date = new Date(deal.expectedCloseDate);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (!forecast.byMonth[monthKey]) {
+            forecast.byMonth[monthKey] = {
+              count: 0,
+              totalValue: 0,
+              weightedValue: 0,
+            };
+          }
+          forecast.byMonth[monthKey].count++;
+          forecast.byMonth[monthKey].totalValue += deal.amount;
+          forecast.byMonth[monthKey].weightedValue += deal.amount * (deal.probability || 0) / 100;
+        }
       }
 
       res.json(forecast);
