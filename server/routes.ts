@@ -14,7 +14,7 @@ import {
   insertDealSchema,
   insertAutomationRuleSchema,
 } from "@shared/schema";
-import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, generateNextBestAction } from "./ai";
+import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, generateNextBestAction, analyzeSentimentTimeline } from "./ai";
 import { ms365Integration } from "./ms365";
 import { automationEngine } from "./automation";
 
@@ -284,6 +284,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       res.json(nextAction);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI Sentiment Timeline
+  app.get("/api/leads/:id/sentiment-timeline", async (req, res) => {
+    try {
+      const lead = await storage.getLead(req.params.id);
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+
+      const conversations = await storage.getConversationsByLeadId(req.params.id);
+
+      const timeline = await analyzeSentimentTimeline(
+        conversations.map(c => ({
+          subject: c.subject,
+          body: c.body,
+          isFromLead: Boolean(c.isFromLead),
+          sentAt: c.sentAt,
+        }))
+      );
+
+      res.json(timeline);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

@@ -31,6 +31,14 @@ export interface NextBestAction {
   estimatedImpact: string;
 }
 
+export interface SentimentTimelinePoint {
+  date: string;
+  sentiment: "positive" | "neutral" | "negative";
+  score: number;
+  summary: string;
+  conversationSubject: string;
+}
+
 export async function analyzeLeadConversations(
   leadName: string,
   leadEmail: string,
@@ -290,6 +298,94 @@ Task: ${prompts[responseType]}`,
       subject: `Following up - ${leadName}`,
       body: `Hi ${leadName},\n\nI wanted to follow up on our previous conversation.\n\nLooking forward to hearing from you.\n\nBest regards`,
     };
+  }
+}
+
+/**
+ * Analyze sentiment over time from conversation history
+ */
+export async function analyzeSentimentTimeline(
+  conversations: Array<{
+    subject: string;
+    body: string;
+    isFromLead: boolean;
+    sentAt: Date;
+  }>
+): Promise<SentimentTimelinePoint[]> {
+  if (!conversations || conversations.length === 0) {
+    return [];
+  }
+
+  const conversationsSorted = conversations
+    .sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+
+  try {
+    const conversationList = conversationsSorted
+      .map((c, i) => {
+        const direction = c.isFromLead ? "Lead" : "Sales";
+        const date = new Date(c.sentAt).toLocaleDateString();
+        return `${i + 1}. ${date} - ${direction}: "${c.subject}"\n${c.body.substring(0, 300)}...\n`;
+      })
+      .join("\n");
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at analyzing sentiment in sales conversations. For each conversation, analyze the sentiment and provide:
+- Sentiment classification (positive/neutral/negative)
+- Numeric sentiment score (-10 to +10, where -10 is very negative, 0 is neutral, +10 is very positive)
+- Brief summary of the sentiment expressed
+
+Respond with JSON array:
+[
+  {
+    "conversationIndex": number (1-based index),
+    "sentiment": "positive" | "neutral" | "negative",
+    "score": number (-10 to +10),
+    "summary": "Brief explanation of the sentiment"
+  }
+]`,
+        },
+        {
+          role: "user",
+          content: `Analyze the sentiment for each of these conversations:\n\n${conversationList}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 2048,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const sentimentArray = result.sentiments || [];
+
+    return conversationsSorted.map((conv, index) => {
+      const sentimentData = sentimentArray.find((s: any) => s.conversationIndex === index + 1) || {
+        sentiment: "neutral",
+        score: 0,
+        summary: "No sentiment data available",
+      };
+
+      return {
+        date: new Date(conv.sentAt).toISOString(),
+        sentiment: ["positive", "neutral", "negative"].includes(sentimentData.sentiment)
+          ? sentimentData.sentiment
+          : "neutral",
+        score: Math.max(-10, Math.min(10, sentimentData.score || 0)),
+        summary: sentimentData.summary || "No analysis available",
+        conversationSubject: conv.subject,
+      };
+    });
+  } catch (error) {
+    console.error("Error analyzing sentiment timeline:", error);
+    return conversationsSorted.map((conv) => ({
+      date: new Date(conv.sentAt).toISOString(),
+      sentiment: "neutral" as const,
+      score: 0,
+      summary: "Error analyzing sentiment",
+      conversationSubject: conv.subject,
+    }));
   }
 }
 
