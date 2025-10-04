@@ -96,22 +96,33 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
     - Owner assignment in lead forms with unassigned state support
     - Seeded test users for demonstration (1 admin, 2 managers, 4 sales reps)
 - **October 2024**: Advanced AI Capabilities Implementation
-  - AI conversation summarization
-    - Generates concise summaries of email threads
-    - Extracts key points and action items
+  - AI conversation summarization (GET /api/leads/:id/conversation-summary)
+    - Generates concise summaries of email threads with key points and action items
     - Analyzes overall sentiment (positive/neutral/negative)
-    - Provides next-step recommendations
-    - API endpoint: GET /api/leads/:id/conversation-summary
-  - AI email response drafting
+    - Provides intelligent next-step recommendations
+  - AI email response drafting (POST /api/leads/:id/draft-email)
     - Context-aware email composition using GPT-5
     - Multiple response types: follow-up, answer-question, proposal, closing
-    - Personalized content based on conversation history
-    - Professional tone with clear call-to-actions
-    - API endpoint: POST /api/leads/:id/draft-email
-  - AI functions in server/ai.ts
-    - summarizeConversations(): Email thread summarization
-    - draftEmailResponse(): Context-aware email generation
-    - Integrated with existing analyzeLeadConversations() scoring
+    - Personalized content based on conversation history with professional tone
+    - Input validation for supported response types
+  - Next-best-action recommendations (GET /api/leads/:id/next-best-action)
+    - Analyzes lead state (score, conversations, activities, tasks)
+    - Recommends most impactful next action (send_email, schedule_call, convert_to_deal, etc.)
+    - Provides priority level, reasoning, and estimated impact
+    - Suggests talking points for recommended actions
+  - Sentiment analysis timeline (GET /api/leads/:id/sentiment-timeline)
+    - Tracks sentiment evolution across all conversations
+    - Numeric scoring (-10 to +10) with classification (positive/neutral/negative)
+    - Chronological tracking for relationship progression analysis
+    - Brief explanations for each sentiment data point
+  - Predictive deal forecasting (GET /api/deals/:id/forecast)
+    - Win/loss probability prediction using comprehensive AI analysis
+    - Considers deal velocity, conversation sentiment, engagement metrics
+    - Provides outcome classification (likely_win/uncertain/likely_loss)
+    - Identifies key positive/negative factors and actionable recommendations
+    - Confidence levels and estimated close date predictions
+  - Robust error handling with graceful fallbacks for all AI features
+  - All AI functions integrated in server/ai.ts with GPT-5 model
 - **October 2024**: Workflow Automation Engine Implementation
   - Database schema extensions
     - automation_rules table: stores trigger-action configurations with JSONB conditions
