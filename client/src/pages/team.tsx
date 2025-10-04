@@ -82,12 +82,13 @@ export default function Team() {
   };
 
   const getRoleBadge = (role: string) => {
-    const variants: Record<string, { label: string; className: string }> = {
-      admin: { label: "Admin", className: "bg-purple-600" },
-      sales_manager: { label: "Manager", className: "bg-blue-600" },
-      sales_rep: { label: "Sales Rep", className: "bg-green-600" },
+    const variants: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
+      admin: { label: "Admin", variant: "default" },
+      sales_manager: { label: "Manager", variant: "secondary" },
+      sales_rep: { label: "Sales Rep", variant: "outline" },
     };
-    return variants[role] || variants.sales_rep;
+    const config = variants[role] || variants.sales_rep;
+    return { label: config.label, variant: config.variant };
   };
 
   const admins = users.filter((u) => u.role === "admin");
@@ -259,7 +260,7 @@ export default function Team() {
                           {admin.email}
                         </p>
                       </div>
-                      <Badge variant="default" className={getRoleBadge(admin.role).className}>
+                      <Badge variant={getRoleBadge(admin.role).variant}>
                         {getRoleBadge(admin.role).label}
                       </Badge>
                     </div>
@@ -291,7 +292,7 @@ export default function Team() {
                           {manager.email}
                         </CardDescription>
                       </div>
-                      <Badge variant="default" className={getRoleBadge(manager.role).className}>
+                      <Badge variant={getRoleBadge(manager.role).variant}>
                         {getRoleBadge(manager.role).label}
                       </Badge>
                     </div>

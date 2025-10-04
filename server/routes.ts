@@ -375,7 +375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User routes
+  // User routes - Order matters! Specific routes before parameterized ones
   app.get("/api/users", async (req, res) => {
     try {
       const users = await storage.getUsers();
@@ -385,18 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", async (req, res) => {
-    try {
-      const user = await storage.getUser(req.params.id);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-      res.json(user);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
+  // Specific routes MUST come before /api/users/:id
   app.get("/api/users/role/:role", async (req, res) => {
     try {
       const users = await storage.getUsersByRole(req.params.role);
@@ -410,6 +399,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const subordinates = await storage.getUsersByManager(req.params.id);
       res.json(subordinates);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Generic :id route must come AFTER specific routes
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

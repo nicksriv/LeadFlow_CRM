@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { insertLeadSchema, type InsertLead, type Lead } from "@shared/schema";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { insertLeadSchema, type InsertLead, type Lead, type User } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,6 +32,13 @@ interface LeadFormDialogProps {
 
 export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps) {
   const { toast } = useToast();
+  
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const salesUsers = users.filter(u => u.role === "sales_rep" || u.role === "sales_manager");
+
   const form = useForm<InsertLead>({
     resolver: zodResolver(insertLeadSchema),
     defaultValues: {
@@ -39,6 +47,7 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
       company: lead?.company || "",
       phone: lead?.phone || "",
       position: lead?.position || "",
+      ownerId: lead?.ownerId || undefined,
       notes: lead?.notes || "",
       tags: lead?.tags || [],
     },
@@ -169,25 +178,56 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="tel"
-                      placeholder="+1 (555) 000-0000"
-                      {...field}
-                      value={field.value || ""}
-                      data-testid="input-lead-phone"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="tel"
+                        placeholder="+1 (555) 000-0000"
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-lead-phone"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="ownerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assigned To</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "unassigned" ? undefined : value)}
+                      value={field.value || "unassigned"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-lead-owner">
+                          <SelectValue placeholder="Select owner" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {salesUsers.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name} ({user.role === "sales_manager" ? "Manager" : "Sales Rep"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
