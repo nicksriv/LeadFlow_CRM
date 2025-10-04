@@ -140,6 +140,35 @@ export const scoringConfig = pgTable("scoring_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Automation/Workflow rules
+export const automationRules = pgTable("automation_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  triggerType: text("trigger_type").notNull(), // lead_score_change, conversation_received, deal_stage_change, time_based
+  triggerConditions: jsonb("trigger_conditions").notNull(), // Complex condition object
+  actionType: text("action_type").notNull(), // convert_to_deal, create_task, advance_stage, assign_lead, send_email
+  actionConfig: jsonb("action_config").notNull(), // Action-specific configuration
+  isActive: integer("is_active").notNull().default(1),
+  priority: integer("priority").notNull().default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Automation execution log
+export const automationLogs = pgTable("automation_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ruleId: varchar("rule_id").notNull().references(() => automationRules.id, { onDelete: "cascade" }),
+  leadId: varchar("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+  dealId: varchar("deal_id"), // Reference added in relations
+  triggerData: jsonb("trigger_data"), // What triggered the automation
+  actionResult: jsonb("action_result"), // Result of the action
+  success: integer("success").notNull().default(1), // 0 or 1
+  errorMessage: text("error_message"),
+  executedAt: timestamp("executed_at").notNull().defaultNow(),
+});
+
 // Pipelines for deal management
 export const pipelines = pgTable("pipelines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -381,6 +410,17 @@ export const insertScoringConfigSchema = createInsertSchema(scoringConfig).omit(
   updatedAt: true,
 });
 
+export const insertAutomationRuleSchema = createInsertSchema(automationRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAutomationLogSchema = createInsertSchema(automationLogs).omit({
+  id: true,
+  executedAt: true,
+});
+
 export const insertPipelineSchema = createInsertSchema(pipelines).omit({
   id: true,
   createdAt: true,
@@ -431,6 +471,10 @@ export type Task = typeof tasks.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type ScoringConfig = typeof scoringConfig.$inferSelect;
 export type InsertScoringConfig = z.infer<typeof insertScoringConfigSchema>;
+export type AutomationRule = typeof automationRules.$inferSelect;
+export type InsertAutomationRule = z.infer<typeof insertAutomationRuleSchema>;
+export type AutomationLog = typeof automationLogs.$inferSelect;
+export type InsertAutomationLog = z.infer<typeof insertAutomationLogSchema>;
 export type Pipeline = typeof pipelines.$inferSelect;
 export type InsertPipeline = z.infer<typeof insertPipelineSchema>;
 export type PipelineStage = typeof pipelineStages.$inferSelect;

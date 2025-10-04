@@ -15,6 +15,7 @@ import {
 } from "@shared/schema";
 import { analyzeLeadConversations } from "./ai";
 import { ms365Integration } from "./ms365";
+import { automationEngine } from "./automation";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Lead routes
@@ -131,6 +132,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: { conversationId: conversation.id },
         });
 
+        // Trigger automation on conversation received
+        if (conversation.isFromLead) {
+          await automationEngine.onConversationReceived(conversation.id);
+        }
+
         const allConversations = await storage.getConversationsByLeadId(lead.id);
         const conversationsForAnalysis = allConversations.map((c) => ({
           subject: c.subject,
@@ -169,6 +175,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: `Lead score updated from ${previousScore} to ${analysis.score} (${previousStatus} → ${analysis.status})`,
             metadata: { factors: analysis.factors },
           });
+
+          // Trigger automation workflows on score change
+          await automationEngine.onLeadScoreChange(
+            lead.id,
+            previousScore,
+            analysis.score,
+            analysis.status
+          );
         }
       }
 

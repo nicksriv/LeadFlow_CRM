@@ -10,6 +10,8 @@ import {
   leadAssignments,
   tasks,
   scoringConfig,
+  automationRules,
+  automationLogs,
   pipelines,
   pipelineStages,
   deals,
@@ -36,6 +38,10 @@ import {
   type InsertTask,
   type ScoringConfig,
   type InsertScoringConfig,
+  type AutomationRule,
+  type InsertAutomationRule,
+  type AutomationLog,
+  type InsertAutomationLog,
   type Pipeline,
   type InsertPipeline,
   type PipelineStage,
@@ -147,6 +153,21 @@ export interface IStorage {
   // Deal Stage History
   getDealStageHistory(dealId: string): Promise<DealStageHistory[]>;
   createDealStageHistory(history: InsertDealStageHistory): Promise<DealStageHistory>;
+
+  // Automation Rules
+  getAutomationRules(): Promise<AutomationRule[]>;
+  getAutomationRule(id: string): Promise<AutomationRule | undefined>;
+  createAutomationRule(rule: InsertAutomationRule): Promise<AutomationRule>;
+  updateAutomationRule(id: string, rule: Partial<InsertAutomationRule>): Promise<AutomationRule | undefined>;
+  deleteAutomationRule(id: string): Promise<void>;
+
+  // Automation Logs
+  getAutomationLogs(ruleId?: string): Promise<AutomationLog[]>;
+  logAutomationExecution(log: InsertAutomationLog): Promise<AutomationLog>;
+
+  // Helper methods
+  getConversation(id: string): Promise<Conversation | undefined>;
+  getPipelineStages(pipelineId: string): Promise<PipelineStage[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -585,6 +606,65 @@ export class DatabaseStorage implements IStorage {
   async createDealStageHistory(insertHistory: InsertDealStageHistory): Promise<DealStageHistory> {
     const [history] = await db.insert(dealStageHistory).values(insertHistory).returning();
     return history;
+  }
+
+  // Automation Rules
+  async getAutomationRules(): Promise<AutomationRule[]> {
+    return db.select().from(automationRules).orderBy(desc(automationRules.priority), desc(automationRules.createdAt));
+  }
+
+  async getAutomationRule(id: string): Promise<AutomationRule | undefined> {
+    const [rule] = await db.select().from(automationRules).where(eq(automationRules.id, id));
+    return rule || undefined;
+  }
+
+  async createAutomationRule(insertRule: InsertAutomationRule): Promise<AutomationRule> {
+    const [rule] = await db.insert(automationRules).values(insertRule).returning();
+    return rule;
+  }
+
+  async updateAutomationRule(id: string, updates: Partial<InsertAutomationRule>): Promise<AutomationRule | undefined> {
+    const [rule] = await db
+      .update(automationRules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(automationRules.id, id))
+      .returning();
+    return rule || undefined;
+  }
+
+  async deleteAutomationRule(id: string): Promise<void> {
+    await db.delete(automationRules).where(eq(automationRules.id, id));
+  }
+
+  // Automation Logs
+  async getAutomationLogs(ruleId?: string): Promise<AutomationLog[]> {
+    if (ruleId) {
+      return db
+        .select()
+        .from(automationLogs)
+        .where(eq(automationLogs.ruleId, ruleId))
+        .orderBy(desc(automationLogs.executedAt));
+    }
+    return db.select().from(automationLogs).orderBy(desc(automationLogs.executedAt));
+  }
+
+  async logAutomationExecution(insertLog: InsertAutomationLog): Promise<AutomationLog> {
+    const [log] = await db.insert(automationLogs).values(insertLog).returning();
+    return log;
+  }
+
+  // Helper methods
+  async getConversation(id: string): Promise<Conversation | undefined> {
+    const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
+    return conversation || undefined;
+  }
+
+  async getPipelineStages(pipelineId: string): Promise<PipelineStage[]> {
+    return db
+      .select()
+      .from(pipelineStages)
+      .where(eq(pipelineStages.pipelineId, pipelineId))
+      .orderBy(pipelineStages.order);
   }
 }
 
