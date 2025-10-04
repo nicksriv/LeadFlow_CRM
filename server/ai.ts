@@ -39,6 +39,19 @@ export interface SentimentTimelinePoint {
   conversationSubject: string;
 }
 
+export interface DealForecast {
+  winProbability: number;
+  lossProbability: number;
+  outcome: "likely_win" | "uncertain" | "likely_loss";
+  confidence: "high" | "medium" | "low";
+  keyFactors: {
+    positive: string[];
+    negative: string[];
+  };
+  recommendations: string[];
+  estimatedCloseDate: string | null;
+}
+
 export async function analyzeLeadConversations(
   leadName: string,
   leadEmail: string,
@@ -511,6 +524,137 @@ What should we do next?`,
       reason: "Send a follow-up email to re-engage the lead",
       suggestedMessage: "Check in on their interest and offer to answer any questions",
       estimatedImpact: "Maintains relationship and keeps lead warm",
+    };
+  }
+}
+
+/**
+ * Predict deal outcome (win/loss) using AI analysis
+ */
+export async function predictDealOutcome(
+  dealData: {
+    name: string;
+    amount: number;
+    probability: number;
+    stageName: string;
+    daysInStage: number;
+    daysUntilExpectedClose: number;
+  },
+  conversationSentiment: {
+    averageScore: number;
+    recentSentiment: "positive" | "neutral" | "negative";
+  },
+  engagementMetrics: {
+    totalConversations: number;
+    lastContactDays: number;
+    stageChanges: number;
+  }
+): Promise<DealForecast> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert sales forecasting analyst. Predict the likelihood of winning or losing a deal based on comprehensive data analysis.
+
+Consider these critical factors:
+1. Deal value and configured probability
+2. Time spent in current stage (velocity)
+3. Conversation sentiment and engagement
+4. Days until expected close
+5. Stage progression history
+6. Recent contact patterns
+
+Provide:
+- Win probability (0-100%)
+- Loss probability (0-100%, should sum to ~100 with win probability)
+- Overall outcome classification
+- Confidence level in prediction
+- Key positive and negative factors
+- Actionable recommendations
+
+Respond with JSON:
+{
+  "winProbability": number (0-100),
+  "lossProbability": number (0-100),
+  "outcome": "likely_win" | "uncertain" | "likely_loss",
+  "confidence": "high" | "medium" | "low",
+  "keyFactors": {
+    "positive": ["factor 1", "factor 2"],
+    "negative": ["factor 1", "factor 2"]
+  },
+  "recommendations": ["action 1", "action 2", "action 3"],
+  "estimatedCloseDate": "YYYY-MM-DD or null"
+}`,
+        },
+        {
+          role: "user",
+          content: `Predict outcome for this deal:
+
+Deal: ${dealData.name}
+Value: $${dealData.amount}
+Current Probability: ${dealData.probability}%
+Stage: ${dealData.stageName}
+Days in current stage: ${dealData.daysInStage}
+Days until expected close: ${dealData.daysUntilExpectedClose}
+
+Conversation Metrics:
+- Average sentiment score: ${conversationSentiment.averageScore}/10
+- Recent sentiment: ${conversationSentiment.recentSentiment}
+- Total conversations: ${engagementMetrics.totalConversations}
+- Days since last contact: ${engagementMetrics.lastContactDays}
+- Stage changes: ${engagementMetrics.stageChanges}
+
+Provide win/loss prediction with analysis.`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 1536,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+
+    const winProb = Math.max(0, Math.min(100, result.winProbability || 50));
+    const lossProb = Math.max(0, Math.min(100, result.lossProbability || (100 - winProb)));
+
+    let outcome: "likely_win" | "uncertain" | "likely_loss" = "uncertain";
+    if (winProb >= 65) outcome = "likely_win";
+    else if (winProb <= 35) outcome = "likely_loss";
+
+    return {
+      winProbability: winProb,
+      lossProbability: lossProb,
+      outcome,
+      confidence: ["high", "medium", "low"].includes(result.confidence)
+        ? result.confidence
+        : "medium",
+      keyFactors: {
+        positive: Array.isArray(result.keyFactors?.positive)
+          ? result.keyFactors.positive
+          : [],
+        negative: Array.isArray(result.keyFactors?.negative)
+          ? result.keyFactors.negative
+          : [],
+      },
+      recommendations: Array.isArray(result.recommendations)
+        ? result.recommendations
+        : ["Continue engagement and monitor progress"],
+      estimatedCloseDate: result.estimatedCloseDate || null,
+    };
+  } catch (error) {
+    console.error("Error predicting deal outcome:", error);
+    return {
+      winProbability: 50,
+      lossProbability: 50,
+      outcome: "uncertain",
+      confidence: "low",
+      keyFactors: {
+        positive: ["Deal is active"],
+        negative: ["Insufficient data for accurate prediction"],
+      },
+      recommendations: ["Increase engagement", "Update deal information", "Monitor progress closely"],
+      estimatedCloseDate: null,
     };
   }
 }

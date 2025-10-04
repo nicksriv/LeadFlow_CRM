@@ -14,7 +14,7 @@ import {
   insertDealSchema,
   insertAutomationRuleSchema,
 } from "@shared/schema";
-import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, generateNextBestAction, analyzeSentimentTimeline } from "./ai";
+import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, generateNextBestAction, analyzeSentimentTimeline, predictDealOutcome } from "./ai";
 import { ms365Integration } from "./ms365";
 import { automationEngine } from "./automation";
 
@@ -1086,6 +1086,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const history = await storage.getDealStageHistory(req.params.id);
       res.json(history);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI Deal Outcome Prediction
+  app.get("/api/deals/:id/forecast", async (req, res) => {
+    try {
+      const deal = await storage.getDeal(req.params.id);
+      if (!deal) {
+        return res.status(404).json({ error: "Deal not found" });
+      }
+
+      const [stage, stageHistory, conversations] = await Promise.all([
+        storage.getStage(deal.stageId),
+        storage.getDealStageHistory(deal.id),
+        deal.leadId ? storage.getConversationsByLeadId(deal.leadId) : Promise.resolve([]),
+      ]);
+
+      // Calculate days in current stage
+      const latestStageChange = stageHistory.length > 0
+        ? stageHistory.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+        : null;
+      const daysInStage = latestStageChange
+        ? Math.floor((Date.now() - new Date(latestStageChange.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+
+      // Calculate days until expected close
+      const daysUntilClose = deal.expectedCloseDate
+        ? Math.floor((new Date(deal.expectedCloseDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+        : 999;
+
+      // Calculate conversation sentiment
+      let averageSentiment = 0;
+      let recentSentiment: "positive" | "neutral" | "negative" = "neutral";
+      
+      if (conversations.length > 0) {
+        try {
+          const sentimentTimeline = await analyzeSentimentTimeline(
+            conversations.map(c => ({
+              subject: c.subject,
+              body: c.body,
+              isFromLead: Boolean(c.isFromLead),
+              sentAt: c.sentAt,
+            }))
+          );
+          
+          if (sentimentTimeline.length > 0) {
+            averageSentiment = sentimentTimeline.reduce((sum, s) => sum + s.score, 0) / sentimentTimeline.length;
+            const recent = sentimentTimeline[sentimentTimeline.length - 1];
+            recentSentiment = recent?.sentiment || "neutral";
+          }
+        } catch (error) {
+          console.error("Error analyzing sentiment for deal forecast:", error);
+          // Continue with default neutral sentiment
+        }
+      }
+
+      // Calculate engagement metrics
+      const lastConversation = conversations.length > 0
+        ? conversations.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())[0]
+        : null;
+      
+      const lastContactDays = lastConversation
+        ? Math.floor((Date.now() - new Date(lastConversation.sentAt).getTime()) / (1000 * 60 * 60 * 24))
+        : 999;
+
+      const forecast = await predictDealOutcome(
+        {
+          name: deal.name,
+          amount: deal.amount,
+          probability: deal.probability || 50,
+          stageName: stage?.name || "Unknown",
+          daysInStage,
+          daysUntilExpectedClose: daysUntilClose,
+        },
+        {
+          averageScore: averageSentiment,
+          recentSentiment,
+        },
+        {
+          totalConversations: conversations.length,
+          lastContactDays,
+          stageChanges: stageHistory.length,
+        }
+      );
+
+      res.json(forecast);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
