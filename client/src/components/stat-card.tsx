@@ -10,35 +10,35 @@ interface StatCardProps {
     isPositive: boolean;
   };
   description?: string;
-  color?: "blue" | "purple" | "orange" | "green" | "pink";
+  color?: "primary" | "success" | "warning" | "info" | "destructive";
 }
 
-export function StatCard({ title, value, icon: Icon, trend, description, color = "blue" }: StatCardProps) {
+export function StatCard({ title, value, icon: Icon, trend, description, color = "primary" }: StatCardProps) {
   const colorVariants = {
-    blue: {
-      iconBg: "bg-blue-500/10 dark:bg-blue-500/20",
-      iconColor: "text-blue-600 dark:text-blue-400",
-      gradient: "from-blue-500/5 to-transparent dark:from-blue-500/10"
+    primary: {
+      iconBg: "bg-primary/10",
+      iconColor: "text-primary",
+      gradient: "from-primary/5 to-transparent"
     },
-    purple: {
-      iconBg: "bg-purple-500/10 dark:bg-purple-500/20",
-      iconColor: "text-purple-600 dark:text-purple-400",
-      gradient: "from-purple-500/5 to-transparent dark:from-purple-500/10"
+    success: {
+      iconBg: "bg-success/10",
+      iconColor: "text-success",
+      gradient: "from-success/5 to-transparent"
     },
-    orange: {
-      iconBg: "bg-orange-500/10 dark:bg-orange-500/20",
-      iconColor: "text-orange-600 dark:text-orange-400",
-      gradient: "from-orange-500/5 to-transparent dark:from-orange-500/10"
+    warning: {
+      iconBg: "bg-warning/10",
+      iconColor: "text-warning",
+      gradient: "from-warning/5 to-transparent"
     },
-    green: {
-      iconBg: "bg-green-500/10 dark:bg-green-500/20",
-      iconColor: "text-green-600 dark:text-green-400",
-      gradient: "from-green-500/5 to-transparent dark:from-green-500/10"
+    info: {
+      iconBg: "bg-info/10",
+      iconColor: "text-info",
+      gradient: "from-info/5 to-transparent"
     },
-    pink: {
-      iconBg: "bg-pink-500/10 dark:bg-pink-500/20",
-      iconColor: "text-pink-600 dark:text-pink-400",
-      gradient: "from-pink-500/5 to-transparent dark:from-pink-500/10"
+    destructive: {
+      iconBg: "bg-destructive/10",
+      iconColor: "text-destructive",
+      gradient: "from-destructive/5 to-transparent"
     }
   };
 
@@ -61,7 +61,7 @@ export function StatCard({ title, value, icon: Icon, trend, description, color =
             {trend && (
               <span
                 className={`text-xs font-medium ${
-                  trend.isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                  trend.isPositive ? "text-success" : "text-destructive"
                 }`}
               >
                 {trend.isPositive ? "+" : "-"}

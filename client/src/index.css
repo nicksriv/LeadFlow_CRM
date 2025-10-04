@@ -98,6 +98,14 @@
   --status-warm-foreground: 0 0% 100%;
   --status-hot: 0 85% 60%;
   --status-hot-foreground: 0 0% 100%;
+  
+  /* Semantic colors for UI elements */
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+  --info: 221 83% 53%;
+  --info-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
 
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 
@@ -212,13 +220,21 @@
   --shadow-xl: 0px 16px 32px 0px hsl(220 13% 5% / 0.55), 0px 6px 12px -3px hsl(220 13% 5% / 0.50);
   --shadow-2xl: 0px 24px 48px 0px hsl(220 13% 5% / 0.60);
 
-  /* Lead status colors */
-  --status-cold: 200 80% 55%;
-  --status-cold-foreground: 0 0% 100%;
-  --status-warm: 35 92% 55%;
-  --status-warm-foreground: 0 0% 100%;
-  --status-hot: 0 85% 60%;
-  --status-hot-foreground: 0 0% 100%;
+  /* Lead status colors - brighter for dark mode backgrounds */
+  --status-cold: 200 80% 60%;
+  --status-cold-foreground: 220 15% 10%;
+  --status-warm: 35 92% 65%;
+  --status-warm-foreground: 220 15% 10%;
+  --status-hot: 0 85% 70%;
+  --status-hot-foreground: 220 15% 10%;
+  
+  /* Semantic colors for UI elements - brighter for dark mode backgrounds */
+  --success: 142 70% 55%;
+  --success-foreground: 220 15% 10%;
+  --info: 221 75% 65%;
+  --info-foreground: 220 15% 10%;
+  --warning: 38 92% 65%;
+  --warning-foreground: 220 15% 10%;
 
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 

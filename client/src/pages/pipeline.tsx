@@ -38,7 +38,7 @@ function DealCard({ deal, stage }: { deal: Deal; stage: PipelineStage }) {
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const amountColor = deal.amount >= 100000 ? "text-emerald-600" : deal.amount >= 50000 ? "text-blue-600" : "text-gray-600";
+  const amountColor = deal.amount >= 100000 ? "text-success" : deal.amount >= 50000 ? "text-info" : "text-muted-foreground";
 
   const handleClick = (e: React.MouseEvent) => {
     if (!isDragging) {
@@ -412,10 +412,19 @@ function NewDealDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => {
+            const pipelineId = data.pipelineId || pipeline?.id;
+            if (!pipelineId) {
+              toast({
+                title: "Error",
+                description: "Pipeline is required",
+                variant: "destructive",
+              });
+              return;
+            }
             const dealData = {
               ...data,
               stageId: data.stageId || firstStage?.id || stages[0]?.id,
-              pipelineId: data.pipelineId || pipeline?.id,
+              pipelineId,
               expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : undefined,
             };
             createDealMutation.mutate(dealData);

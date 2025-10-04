@@ -94,15 +94,15 @@ export function AppSidebar() {
     const variants: Record<string, { label: string; className: string }> = {
       admin: { 
         label: "Admin", 
-        className: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20" 
+        className: "bg-primary/10 text-primary border-primary/20" 
       },
       sales_manager: { 
         label: "Manager", 
-        className: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20" 
+        className: "bg-info/10 text-info border-info/20" 
       },
       sales_rep: { 
         label: "Sales Rep", 
-        className: "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20" 
+        className: "bg-success/10 text-success border-success/20" 
       },
     };
     return variants[role] || variants.sales_rep;
@@ -152,8 +152,8 @@ export function AppSidebar() {
                 className="flex items-center gap-3 w-full p-2 rounded-md hover-elevate active-elevate-2 transition-colors"
                 data-testid="button-user-menu"
               >
-                <Avatar className="h-8 w-8 bg-gradient-to-br from-purple-500 to-blue-500">
-                  <AvatarFallback className="bg-transparent text-white text-sm">
+                <Avatar className="h-8 w-8 bg-gradient-to-br from-primary to-info">
+                  <AvatarFallback className="bg-transparent text-primary-foreground text-sm">
                     {getInitials(currentUser.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -166,8 +166,8 @@ export function AppSidebar() {
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="end" className="w-56">
               <div className="flex items-center gap-2 p-2">
-                <Avatar className="h-10 w-10 bg-gradient-to-br from-purple-500 to-blue-500">
-                  <AvatarFallback className="bg-transparent text-white">
+                <Avatar className="h-10 w-10 bg-gradient-to-br from-primary to-info">
+                  <AvatarFallback className="bg-transparent text-primary-foreground">
                     {getInitials(currentUser.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -191,7 +191,7 @@ export function AppSidebar() {
                 Preferences
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600 dark:text-red-400" data-testid="menu-logout">
+              <DropdownMenuItem className="text-destructive" data-testid="menu-logout">
                 <LogOut className="h-4 w-4 mr-2" />
                 Log Out
               </DropdownMenuItem>

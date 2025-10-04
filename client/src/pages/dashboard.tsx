@@ -84,28 +84,28 @@ export default function Dashboard() {
           value={stats?.totalLeads || 0}
           icon={Users}
           description="across all statuses"
-          color="blue"
+          color="primary"
         />
         <StatCard
           title="Hot Leads"
           value={stats?.hotLeads || 0}
           icon={Target}
           description="ready to convert"
-          color="orange"
+          color="warning"
         />
         <StatCard
           title="Average Score"
           value={stats?.avgScore || 0}
           icon={TrendingUp}
           description="out of 100"
-          color="purple"
+          color="info"
         />
         <StatCard
           title="Conversations"
           value={stats?.totalConversations || 0}
           icon={Mail}
           description="total email threads"
-          color="green"
+          color="success"
         />
       </div>
 

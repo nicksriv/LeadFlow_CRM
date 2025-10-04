@@ -7,6 +7,7 @@ import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { LeadScoreMeter } from "@/components/lead-score-meter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import type { Lead, Conversation, Activity, Task, Pipeline, PipelineStage, User as UserType } from "@shared/schema";
@@ -73,7 +74,7 @@ export default function LeadDetail() {
   });
 
   // AI Features
-  const { data: conversationSummary } = useQuery<{
+  const { data: conversationSummary, isLoading: summaryLoading } = useQuery<{
     summary: string;
     keyPoints: string[];
     actionItems: string[];
@@ -84,7 +85,7 @@ export default function LeadDetail() {
     enabled: !!leadId && (conversations?.length || 0) > 0,
   });
 
-  const { data: nextBestAction } = useQuery<{
+  const { data: nextBestAction, isLoading: actionLoading } = useQuery<{
     action: string;
     priority: "high" | "medium" | "low";
     reason: string;
@@ -95,7 +96,7 @@ export default function LeadDetail() {
     enabled: !!leadId,
   });
 
-  const { data: sentimentTimeline } = useQuery<Array<{
+  const { data: sentimentTimeline, isLoading: sentimentLoading } = useQuery<Array<{
     date: string;
     sentiment: "positive" | "neutral" | "negative";
     score: number;
@@ -372,7 +373,7 @@ export default function LeadDetail() {
                         <div className="flex items-start gap-3">
                           <div className="pt-0.5">
                             {task.status === "completed" ? (
-                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                              <CheckCircle2 className="h-5 w-5 text-success" />
                             ) : (
                               <Clock className="h-5 w-5 text-muted-foreground" />
                             )}
@@ -426,11 +427,29 @@ export default function LeadDetail() {
               ) : (
                 <div className="space-y-4">
                   {/* Next Best Action */}
-                  {nextBestAction && (
+                  {actionLoading ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Lightbulb className="h-5 w-5 text-warning" />
+                          Recommended Action
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-5 w-20" />
+                          <Skeleton className="h-5 w-24" />
+                        </div>
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </CardContent>
+                    </Card>
+                  ) : nextBestAction && (
                     <Card data-testid="card-next-best-action">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                          <Lightbulb className="h-5 w-5 text-yellow-600" />
+                          <Lightbulb className="h-5 w-5 text-warning" />
                           Recommended Action
                         </CardTitle>
                       </CardHeader>
@@ -462,11 +481,33 @@ export default function LeadDetail() {
                   )}
 
                   {/* Conversation Summary */}
-                  {conversationSummary && (
+                  {summaryLoading ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <MessageSquare className="h-5 w-5 text-info" />
+                          Conversation Summary
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                        <div className="pt-2 space-y-2">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-full" />
+                        </div>
+                        <div className="pt-2">
+                          <Skeleton className="h-5 w-32" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : conversationSummary && (
                     <Card data-testid="card-conversation-summary">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                          <MessageSquare className="h-5 w-5 text-blue-600" />
+                          <MessageSquare className="h-5 w-5 text-info" />
                           Conversation Summary
                         </CardTitle>
                       </CardHeader>
@@ -511,11 +552,35 @@ export default function LeadDetail() {
                   )}
 
                   {/* Sentiment Timeline */}
-                  {sentimentTimeline && sentimentTimeline.length > 0 && (
+                  {sentimentLoading ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <ActivityIcon className="h-5 w-5 text-primary" />
+                          Sentiment Timeline
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex gap-3 pb-3 border-b last:border-0">
+                            <Skeleton className="w-2 h-2 rounded-full mt-2" />
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-5 w-12" />
+                              </div>
+                              <Skeleton className="h-3 w-3/4" />
+                              <Skeleton className="h-3 w-24" />
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ) : sentimentTimeline && sentimentTimeline.length > 0 && (
                     <Card data-testid="card-sentiment-timeline">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                          <ActivityIcon className="h-5 w-5 text-purple-600" />
+                          <ActivityIcon className="h-5 w-5 text-primary" />
                           Sentiment Timeline
                         </CardTitle>
                       </CardHeader>
@@ -524,9 +589,9 @@ export default function LeadDetail() {
                           {sentimentTimeline.map((point, idx) => (
                             <div key={idx} className="flex gap-3 pb-3 border-b last:border-0">
                               <div className={`w-2 h-2 rounded-full mt-2 ${
-                                point.sentiment === "positive" ? "bg-green-500" :
-                                point.sentiment === "negative" ? "bg-red-500" :
-                                "bg-gray-400"
+                                point.sentiment === "positive" ? "bg-success" :
+                                point.sentiment === "negative" ? "bg-destructive" :
+                                "bg-muted-foreground"
                               }`} />
                               <div className="flex-1">
                                 <div className="flex items-center justify-between mb-1">

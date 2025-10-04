@@ -396,8 +396,8 @@ export default function DealDetail() {
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-green-500/10 rounded-lg">
-                      <Calendar className="h-5 w-5 text-green-500" />
+                    <div className="p-2 bg-success/10 rounded-lg">
+                      <Calendar className="h-5 w-5 text-success" />
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">Expected Close</div>
@@ -410,8 +410,8 @@ export default function DealDetail() {
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                      <User className="h-5 w-5 text-purple-500" />
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <User className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">Owner</div>
@@ -440,7 +440,7 @@ export default function DealDetail() {
               <Card data-testid="card-deal-forecast">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-purple-600" />
+                    <Sparkles className="h-5 w-5 text-primary" />
                     AI Forecast
                   </CardTitle>
                 </CardHeader>
@@ -466,7 +466,7 @@ export default function DealDetail() {
                     </div>
                     <div className="text-right space-y-1">
                       <div className="text-sm text-muted-foreground">Win Probability</div>
-                      <div className="text-2xl font-bold text-green-600">
+                      <div className="text-2xl font-bold text-success">
                         {dealForecast.winProbability}%
                       </div>
                     </div>
@@ -477,14 +477,14 @@ export default function DealDetail() {
                   <div className="grid grid-cols-2 gap-4">
                     {dealForecast.keyFactors.positive.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5 text-green-600">
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5 text-success">
                           <ThumbsUp className="h-4 w-4" />
                           Positive Factors
                         </h4>
                         <ul className="text-sm text-muted-foreground space-y-1">
                           {dealForecast.keyFactors.positive.map((factor, idx) => (
                             <li key={idx} className="flex items-start gap-1.5">
-                              <span className="text-green-600 mt-0.5">•</span>
+                              <span className="text-success mt-0.5">•</span>
                               <span>{factor}</span>
                             </li>
                           ))}
@@ -494,14 +494,14 @@ export default function DealDetail() {
 
                     {dealForecast.keyFactors.negative.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5 text-red-600">
+                        <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5 text-destructive">
                           <ThumbsDown className="h-4 w-4" />
                           Risk Factors
                         </h4>
                         <ul className="text-sm text-muted-foreground space-y-1">
                           {dealForecast.keyFactors.negative.map((factor, idx) => (
                             <li key={idx} className="flex items-start gap-1.5">
-                              <span className="text-red-600 mt-0.5">•</span>
+                              <span className="text-destructive mt-0.5">•</span>
                               <span>{factor}</span>
                             </li>
                           ))}
