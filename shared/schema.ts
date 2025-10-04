@@ -107,33 +107,6 @@ export const assignmentRules = pgTable("assignment_rules", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Automation/Workflow rules
-export const automationRules = pgTable("automation_rules", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  description: text("description"),
-  triggerType: text("trigger_type").notNull(), // lead_score_change, conversation_received, deal_stage_change, time_based
-  triggerCondition: jsonb("trigger_condition").notNull(), // Complex condition object
-  actionType: text("action_type").notNull(), // convert_to_deal, create_task, advance_stage, assign_lead, send_email
-  actionConfig: jsonb("action_config").notNull(), // Action-specific configuration
-  isActive: integer("is_active").notNull().default(1),
-  priority: integer("priority").notNull().default(0),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// Automation execution log
-export const automationLogs = pgTable("automation_logs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  ruleId: varchar("rule_id").notNull().references(() => automationRules.id, { onDelete: "cascade" }),
-  leadId: varchar("lead_id").references(() => leads.id, { onDelete: "cascade" }),
-  dealId: varchar("deal_id"), // Reference added later
-  success: integer("success").notNull().default(1), // 0 or 1
-  errorMessage: text("error_message"),
-  executedAt: timestamp("executed_at").notNull().defaultNow(),
-  metadata: jsonb("metadata"), // Execution context
-});
-
 // Lead assignments
 export const leadAssignments = pgTable("lead_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
