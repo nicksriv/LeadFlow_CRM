@@ -54,8 +54,9 @@ export const leadScores = pgTable("lead_scores", {
 // Activity log
 export const activities = pgTable("activities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  leadId: varchar("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
-  type: text("type").notNull(), // email_received, email_sent, score_updated, lead_created, etc.
+  leadId: varchar("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+  dealId: varchar("deal_id"), // Link to deal - reference added later to avoid circular dependency
+  type: text("type").notNull(), // email_received, email_sent, score_updated, lead_created, deal_created, etc.
   description: text("description").notNull(),
   metadata: jsonb("metadata"), // Additional context
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -89,7 +90,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   role: text("role").notNull().default("sales_rep"), // admin, sales_manager, sales_rep
-  managerId: varchar("manager_id").references(() => users.id), // Reporting manager for hierarchy
+  managerId: varchar("manager_id"), // Reporting manager for hierarchy - reference added in relations
   isActive: integer("is_active").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -137,6 +138,62 @@ export const scoringConfig = pgTable("scoring_config", {
   responseTimeWeight: integer("response_time_weight").notNull().default(25),
   intentWeight: integer("intent_weight").notNull().default(25),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Pipelines for deal management
+export const pipelines = pgTable("pipelines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: integer("is_default").notNull().default(0), // 0 or 1
+  ownerId: varchar("owner_id").references(() => users.id), // Optional owner for private pipelines
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Pipeline stages
+export const pipelineStages = pgTable("pipeline_stages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pipelineId: varchar("pipeline_id").notNull().references(() => pipelines.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  order: integer("order").notNull(), // Display order
+  defaultProbability: integer("default_probability").notNull().default(0), // 0-100
+  forecastCategory: text("forecast_category").notNull().default("pipeline"), // pipeline, best_case, commit, closed
+  color: text("color"), // Optional color for visual representation
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Deals/Opportunities
+export const deals = pgTable("deals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  amount: integer("amount").notNull().default(0), // Deal value in cents
+  currency: text("currency").notNull().default("USD"),
+  probability: integer("probability"), // Override default stage probability (0-100)
+  expectedCloseDate: timestamp("expected_close_date"),
+  actualCloseDate: timestamp("actual_close_date"),
+  status: text("status").notNull().default("open"), // open, won, lost
+  lostReason: text("lost_reason"), // Why deal was lost
+  pipelineId: varchar("pipeline_id").notNull().references(() => pipelines.id),
+  stageId: varchar("stage_id").notNull().references(() => pipelineStages.id),
+  leadId: varchar("lead_id").references(() => leads.id), // Optional link to lead
+  ownerId: varchar("owner_id").notNull().references(() => users.id), // Deal owner
+  customFields: jsonb("custom_fields"), // Flexible custom data
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Deal stage history for tracking
+export const dealStageHistory = pgTable("deal_stage_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  dealId: varchar("deal_id").notNull().references(() => deals.id, { onDelete: "cascade" }),
+  fromStageId: varchar("from_stage_id").references(() => pipelineStages.id),
+  toStageId: varchar("to_stage_id").notNull().references(() => pipelineStages.id),
+  probability: integer("probability"), // Probability at time of move
+  amount: integer("amount"), // Amount at time of move
+  movedById: varchar("moved_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Define relations
@@ -206,6 +263,64 @@ export const leadAssignmentsRelations = relations(leadAssignments, ({ one }) => 
   }),
 }));
 
+export const pipelinesRelations = relations(pipelines, ({ many, one }) => ({
+  stages: many(pipelineStages),
+  deals: many(deals),
+  owner: one(users, {
+    fields: [pipelines.ownerId],
+    references: [users.id],
+  }),
+}));
+
+export const pipelineStagesRelations = relations(pipelineStages, ({ one, many }) => ({
+  pipeline: one(pipelines, {
+    fields: [pipelineStages.pipelineId],
+    references: [pipelines.id],
+  }),
+  deals: many(deals),
+  historyEntries: many(dealStageHistory),
+}));
+
+export const dealsRelations = relations(deals, ({ one, many }) => ({
+  pipeline: one(pipelines, {
+    fields: [deals.pipelineId],
+    references: [pipelines.id],
+  }),
+  stage: one(pipelineStages, {
+    fields: [deals.stageId],
+    references: [pipelineStages.id],
+  }),
+  lead: one(leads, {
+    fields: [deals.leadId],
+    references: [leads.id],
+  }),
+  owner: one(users, {
+    fields: [deals.ownerId],
+    references: [users.id],
+  }),
+  stageHistory: many(dealStageHistory),
+  activities: many(activities),
+}));
+
+export const dealStageHistoryRelations = relations(dealStageHistory, ({ one }) => ({
+  deal: one(deals, {
+    fields: [dealStageHistory.dealId],
+    references: [deals.id],
+  }),
+  fromStage: one(pipelineStages, {
+    fields: [dealStageHistory.fromStageId],
+    references: [pipelineStages.id],
+  }),
+  toStage: one(pipelineStages, {
+    fields: [dealStageHistory.toStageId],
+    references: [pipelineStages.id],
+  }),
+  movedBy: one(users, {
+    fields: [dealStageHistory.movedById],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertLeadSchema = createInsertSchema(leads).omit({
   id: true,
@@ -266,6 +381,31 @@ export const insertScoringConfigSchema = createInsertSchema(scoringConfig).omit(
   updatedAt: true,
 });
 
+export const insertPipelineSchema = createInsertSchema(pipelines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPipelineStageSchema = createInsertSchema(pipelineStages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDealSchema = createInsertSchema(deals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  amount: z.number().min(0).optional(),
+  probability: z.number().min(0).max(100).optional(),
+});
+
+export const insertDealStageHistorySchema = createInsertSchema(dealStageHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
@@ -289,10 +429,35 @@ export type Task = typeof tasks.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type ScoringConfig = typeof scoringConfig.$inferSelect;
 export type InsertScoringConfig = z.infer<typeof insertScoringConfigSchema>;
+export type Pipeline = typeof pipelines.$inferSelect;
+export type InsertPipeline = z.infer<typeof insertPipelineSchema>;
+export type PipelineStage = typeof pipelineStages.$inferSelect;
+export type InsertPipelineStage = z.infer<typeof insertPipelineStageSchema>;
+export type Deal = typeof deals.$inferSelect;
+export type InsertDeal = z.infer<typeof insertDealSchema>;
+export type DealStageHistory = typeof dealStageHistory.$inferSelect;
+export type InsertDealStageHistory = z.infer<typeof insertDealStageHistorySchema>;
 
 // Extended types with relations
 export type LeadWithRelations = Lead & {
   conversations: Conversation[];
   scores: LeadScore[];
   activities: Activity[];
+};
+
+export type PipelineWithStages = Pipeline & {
+  stages: PipelineStage[];
+};
+
+export type DealWithRelations = Deal & {
+  pipeline: Pipeline;
+  stage: PipelineStage;
+  lead?: Lead;
+  owner: User;
+  stageHistory: DealStageHistory[];
+  activities: Activity[];
+};
+
+export type StageWithDeals = PipelineStage & {
+  deals: Deal[];
 };
