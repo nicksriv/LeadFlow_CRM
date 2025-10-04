@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useRoute, Link } from "wouter";
-import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock } from "lucide-react";
+import { useRoute, Link, useLocation } from "wouter";
+import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
@@ -9,13 +9,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
-import type { Lead, Conversation, Activity, Task } from "@shared/schema";
+import type { Lead, Conversation, Activity, Task, Pipeline, PipelineStage, User as UserType } from "@shared/schema";
 import { useState } from "react";
 import { LeadFormDialog } from "@/components/lead-form-dialog";
 import { EmailComposerDialog } from "@/components/email-composer-dialog";
 import { TaskDialog } from "@/components/task-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertDealSchema, type InsertDeal } from "@shared/schema";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +40,8 @@ export default function LeadDetail() {
   const leadId = params?.id;
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isConvertOpen, setIsConvertOpen] = useState(false);
+  const [, navigate] = useLocation();
   const { toast } = useToast();
 
   const { data: lead, isLoading } = useQuery<Lead>({
@@ -52,6 +62,14 @@ export default function LeadDetail() {
   const { data: tasks } = useQuery<Task[]>({
     queryKey: ["/api/leads", leadId, "tasks"],
     enabled: !!leadId,
+  });
+
+  const { data: pipelines = [] } = useQuery<Pipeline[]>({
+    queryKey: ["/api/pipelines"],
+  });
+
+  const { data: users = [] } = useQuery<UserType[]>({
+    queryKey: ["/api/users"],
   });
 
   const deleteMutation = useMutation({
@@ -111,6 +129,13 @@ export default function LeadDetail() {
           <p className="text-muted-foreground">{lead.company}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setIsConvertOpen(true)}
+            data-testid="button-convert-to-deal"
+          >
+            <TrendingUp className="h-4 w-4 mr-2" />
+            Convert to Deal
+          </Button>
           <EmailComposerDialog
             leadId={lead.id}
             leadEmail={lead.email}
@@ -414,6 +439,230 @@ export default function LeadDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConvertToDealDialog
+        open={isConvertOpen}
+        onOpenChange={setIsConvertOpen}
+        lead={lead}
+        pipelines={pipelines}
+        users={users}
+        onSuccess={(dealId) => navigate(`/deals/${dealId}`)}
+      />
     </div>
+  );
+}
+
+function ConvertToDealDialog({
+  open,
+  onOpenChange,
+  lead,
+  pipelines,
+  users,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  lead: Lead;
+  pipelines: Pipeline[];
+  users: UserType[];
+  onSuccess: (dealId: string) => void;
+}) {
+  const { toast } = useToast();
+  const defaultPipeline = pipelines.find(p => p.isDefault === 1) || pipelines[0];
+  
+  const { data: stages = [] } = useQuery<PipelineStage[]>({
+    queryKey: [`/api/pipelines/${defaultPipeline?.id}/stages`],
+    enabled: !!defaultPipeline?.id && open,
+  });
+
+  const firstStage = stages[0];
+
+  const form = useForm<InsertDeal>({
+    resolver: zodResolver(insertDealSchema),
+    defaultValues: {
+      name: `${lead.company} - ${lead.title || 'Deal'}`,
+      pipelineId: defaultPipeline?.id || "",
+      stageId: firstStage?.id || "",
+      amount: 0,
+      probability: 10,
+      expectedCloseDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      ownerId: lead.ownerId || users[0]?.id || "",
+      leadId: lead.id,
+      description: `Converted from lead: ${lead.name}`,
+      status: "open",
+    },
+  });
+
+  const createDealMutation = useMutation({
+    mutationFn: async (data: InsertDeal) => {
+      const response = await apiRequest("POST", "/api/deals", data);
+      return response.json();
+    },
+    onSuccess: (deal) => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/deals');
+        }
+      });
+      toast({
+        title: "Deal created",
+        description: `Successfully converted ${lead.name} to a deal`,
+      });
+      onOpenChange(false);
+      onSuccess(deal.id);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create deal",
+        description: error?.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Convert Lead to Deal</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => {
+            // Ensure we have the first stage ID and properly format date
+            const dealData = {
+              ...data,
+              stageId: data.stageId || firstStage?.id || stages[0]?.id,
+              expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : undefined,
+            };
+            createDealMutation.mutate(dealData);
+          })} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Deal Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-deal-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount ($)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        data-testid="input-deal-amount"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="probability"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Probability (%)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        data-testid="input-deal-probability"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="ownerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Owner</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-deal-owner">
+                        <SelectValue placeholder="Select owner" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="expectedCloseDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Expected Close Date</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      {...field}
+                      value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
+                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                      data-testid="input-deal-close-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} value={field.value || ""} rows={3} data-testid="input-deal-description" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-convert">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createDealMutation.isPending} data-testid="button-confirm-convert">
+                {createDealMutation.isPending ? "Creating..." : "Create Deal"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -452,9 +452,9 @@ export default function DealDetail() {
                                 {format(new Date(activity.createdAt), "MMM dd, h:mm a")}
                               </div>
                             </div>
-                            {activity.metadata && (
+                            {activity.metadata !== null && activity.metadata !== undefined && (
                               <pre className="text-xs text-muted-foreground mt-1 font-mono">
-                                {String(JSON.stringify(activity.metadata, null, 2))}
+                                {JSON.stringify(activity.metadata, null, 2)}
                               </pre>
                             )}
                           </div>

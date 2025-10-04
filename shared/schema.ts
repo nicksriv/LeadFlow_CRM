@@ -399,6 +399,8 @@ export const insertDealSchema = createInsertSchema(deals).omit({
 }).extend({
   amount: z.number().min(0).optional(),
   probability: z.number().min(0).max(100).optional(),
+  expectedCloseDate: z.union([z.date(), z.string().transform((str) => new Date(str))]).optional(),
+  actualCloseDate: z.union([z.date(), z.string().transform((str) => new Date(str))]).optional(),
 });
 
 export const insertDealStageHistorySchema = createInsertSchema(dealStageHistory).omit({
