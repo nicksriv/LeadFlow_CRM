@@ -25,6 +25,15 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 - **Styling**: Tailwind CSS with Shadcn UI components
 
 ## Recent Changes
+- **January 2025**: Hierarchical user management and ownership system
+  - Implemented hierarchical user management with Admin > Manager > Sales Rep structure
+  - Added Team Management page with organizational hierarchy visualization
+  - Lead ownership tracking with ownerId field and assignment capabilities
+  - Role-based user filtering and subordinate queries
+  - API endpoints for user hierarchy with proper route ordering
+  - Owner assignment in lead forms with unassigned state support
+  - Theme-safe badge variants for role display
+  - Seeded test users for demonstration (1 admin, 2 managers, 4 sales reps)
 - **December 2024**: Added comprehensive new features
   - Email sending capability with template support in lead detail view
   - Email templates management system
@@ -33,7 +42,7 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
   - Advanced Settings page for customizable AI scoring weights
   - Assignment rules and automation infrastructure (schema ready)
   - Enhanced lead detail page with Email Composer and Task dialogs
-  - Updated navigation with Tasks menu item
+  - Updated navigation with Tasks and Team menu items
 - **November 2024**: Initial CRM system setup
   - Complete database schema (Leads, Conversations, Activities, Lead Scores, Email Templates, Tasks, Users, Scoring Config)
   - All frontend components with professional design following design_guidelines.md
@@ -47,14 +56,30 @@ A comprehensive CRM system with MS 365 mailbox integration and AI-powered lead s
 client/
   src/
     components/      # Reusable UI components
-    pages/          # Main page components
+    pages/          # Main page components (Dashboard, Leads, Conversations, Tasks, Team, Analytics, Settings)
     lib/            # Utilities and configurations
 server/
-  routes.ts        # API endpoints
-  storage.ts       # Database storage interface
+  routes.ts        # API endpoints (leads, users, conversations, tasks, templates, scoring)
+  storage.ts       # Database storage interface with hierarchy methods
 shared/
-  schema.ts        # Database schema and types
+  schema.ts        # Database schema and types (8 core tables)
 ```
+
+## User Hierarchy
+- **Admin**: Top-level access, manages all users and settings
+- **Sales Manager**: Manages team of sales reps, views team performance
+- **Sales Rep**: Manages assigned leads, reports to manager
+
+## Database Tables
+- `users`: User accounts with role and managerId for hierarchy
+- `leads`: Lead information with ownerId for assignment
+- `conversations`: Email threads linked to leads
+- `activities`: Activity log for lead interactions
+- `lead_scores`: AI scoring history
+- `email_templates`: Reusable email templates
+- `tasks`: Task management with assignments
+- `scoring_config`: Customizable AI scoring weights
+- `assignment_rules`: Automated lead routing rules
 
 ## Environment Variables
 - `OPENAI_API_KEY`: Required for AI-powered lead scoring
