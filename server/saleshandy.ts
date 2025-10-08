@@ -50,6 +50,8 @@ export async function fetchSaleshandyProspects(
   }
 
   const url = new URL("https://open-api.saleshandy.com/v1/prospects");
+  // Try filtering by status "Replied"
+  url.searchParams.append("status", "Replied");
   // Try without pagination parameters to see what API returns
   // url.searchParams.append("page", page.toString());
   // url.searchParams.append("limit", limit.toString());
@@ -87,51 +89,14 @@ export async function fetchSaleshandyProspects(
     allProspects = rawData.prospects;
   }
 
-  console.log("Total prospects from API:", allProspects.length);
-  
-  // Log the first prospect to see its structure
-  if (allProspects.length > 0) {
-    console.log("First prospect structure:", JSON.stringify(allProspects[0], null, 2));
-  }
-  
-  // Log all unique attribute keys to see what's available
-  const allAttributeKeys = new Set();
-  allProspects.forEach((prospect) => {
-    prospect.attributes?.forEach((attr: { key: string; value: string }) => {
-      allAttributeKeys.add(attr.key);
-    });
-  });
-  console.log("All available attribute keys:", Array.from(allAttributeKeys));
-  
-  // Log the unique "Latest Status" values to see what's available
-  const statusValues = new Set();
-  allProspects.forEach((prospect) => {
-    const latestStatusAttr = prospect.attributes?.find(
-      (attr: { key: string; value: string }) => attr.key === "Latest Status"
-    );
-    if (latestStatusAttr?.value) {
-      statusValues.add(latestStatusAttr.value);
-    }
-  });
-  console.log("Available 'Latest Status' values:", Array.from(statusValues));
-  
-  // Filter prospects to only show those with "Latest Status" = "Replied" (case-insensitive)
-  const prospects = allProspects.filter((prospect) => {
-    const latestStatusAttr = prospect.attributes?.find(
-      (attr: { key: string; value: string }) => attr.key === "Latest Status"
-    );
-    const statusValue = latestStatusAttr?.value?.toLowerCase();
-    return statusValue === "replied";
-  });
-
-  console.log("Filtered prospects (Latest Status = replied):", prospects.length);
+  console.log("Total prospects from API (status=Replied filter):", allProspects.length);
 
   return {
-    prospects: prospects,
+    prospects: allProspects,
     pagination: {
-      total: prospects.length,
+      total: allProspects.length,
       page: 1,
-      limit: prospects.length,
+      limit: allProspects.length,
       totalPages: 1,
     },
   };
