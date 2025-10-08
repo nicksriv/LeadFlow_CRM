@@ -63,10 +63,22 @@ The application is built with a modern tech stack:
 - **enrichmentHistory Table**: Repurposed to track Apollo import attempts with JSONB import data, array of imported fields, credits used, status, and error messages
 - **campaignProspects Table**: Repurposed to track Saleshandy imports with prospect ID, import data, status, and timestamps
 
+### LinkedIn Screenshot OCR (Latest)
+- **Backend Implementation**: `server/linkedin-ocr.ts` implements LinkedIn profile data extraction from screenshots using OpenAI Vision API
+- **OCR Endpoint**: POST `/api/integrations/linkedin/screenshot` - accepts base64 encoded screenshot image
+- **Technology**: OpenAI GPT-4 Vision (gpt-4o) analyzes screenshots and extracts structured data
+- **Data Extraction**: Extracts personal info (name, email, phone), work info (position, company, industry), location (city, state, country), summary/about text, and LinkedIn URL
+- **Auto-fill**: Extracted data automatically populates lead form fields (firstName, lastName, email, phone, position, company, location, notes, etc.)
+- **UI Integration**: Lead form includes LinkedIn screenshot upload section in "Social Profiles" accordion with file picker
+- **Legal Compliance**: Avoids scraping LinkedIn directly; users capture their own screenshots legally
+- **Cost-Effective**: Uses existing OpenAI integration, no additional third-party API costs
+- **User Flow**: Upload screenshot → AI extracts data → Form auto-fills → User reviews/submits
+
 ### Integration Notes
-- API keys are stored in Replit Secrets (APOLLO_API_KEY, SALESHANDY_API_KEY)
+- API keys are stored in Replit Secrets (APOLLO_API_KEY, SALESHANDY_API_KEY, OPENAI_API_KEY)
 - Apollo.io requires paid plan for `/api/v1/mixed_people/search` endpoint access
 - Saleshandy endpoint: `https://open-api.saleshandy.com/api/v1/prospects`
-- Both integrations include comprehensive error handling and user feedback via toasts
+- LinkedIn OCR uses OpenAI Vision API (gpt-4o model) for screenshot analysis
+- All integrations include comprehensive error handling and user feedback via toasts
 - Database tracking tables enable audit trails and import history
 - Duplicate detection prevents importing leads that already exist in the CRM (matched by email)

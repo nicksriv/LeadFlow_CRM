@@ -332,6 +332,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Screenshot image is required" });
       }
 
+      // Validate file size (max 10MB base64 = ~7.5MB original)
+      const sizeInBytes = (imageBase64.length * 3) / 4;
+      const maxSizeInMB = 10;
+      if (sizeInBytes > maxSizeInMB * 1024 * 1024) {
+        return res.status(400).json({ 
+          error: `Image too large. Maximum size is ${maxSizeInMB}MB. Please upload a smaller screenshot.` 
+        });
+      }
+
       console.log("LinkedIn screenshot OCR requested");
 
       // Extract lead data from screenshot using OpenAI Vision
@@ -347,8 +356,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("LinkedIn screenshot OCR error:", error);
+      
+      // Provide helpful error messages based on error type
+      let errorMessage = error.message || "Failed to extract data from screenshot";
+      if (error.message?.includes("parse")) {
+        errorMessage = "Unable to read the screenshot clearly. Please ensure the screenshot shows a LinkedIn profile page with visible text.";
+      }
+      
       res.status(500).json({ 
-        error: error.message || "Failed to extract data from screenshot",
+        error: errorMessage,
         details: error.toString(),
       });
     }
