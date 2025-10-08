@@ -17,6 +17,7 @@ The application is built with a modern tech stack:
 - **User Hierarchy**: The system supports a hierarchical user management structure (Admin > Sales Manager > Sales Rep) with role-based access and lead ownership tracking.
 - **UI/UX Decisions**: Emphasizes semantic color systems, WCAG contrast compliance, and visual feedback through gradients, icons, and progress indicators.
 - **Feature Specifications**: Key capabilities include comprehensive lead and deal management (Kanban board), AI-powered lead scoring and status classification (Cold, Warm, Hot), workflow automation, MS 365 email integration, task management, customizable AI scoring weights, and an analytics dashboard with revenue forecasting.
+- **Lead Data Model**: Comprehensive lead data capture across 5 organized categories: Contact Information (firstName, lastName, email, phone, location), Work Information (position, department, industry, experience), Social Profiles (LinkedIn, Twitter, Facebook, website), Location Information (city, state, country), and Company Information (name, domain, website, industry, size, revenue, founded year, phone, LinkedIn). Form uses Accordion component for organized user experience, auto-generates full name from firstName+lastName, and supports custom JSONB fields.
 
 ## External Dependencies
 - **OpenAI GPT-5**: Used for all AI-powered features, including lead scoring, conversation analysis, summarization, email drafting, and predictive analytics.
