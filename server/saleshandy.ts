@@ -59,7 +59,7 @@ export async function fetchSaleshandyProspects(
     throw new Error("Saleshandy API key not configured");
   }
 
-  const url = new URL("https://open-api.saleshandy.com/api/v1/prospects");
+  const url = new URL("https://open-api.saleshandy.com/v1/prospects");
   url.searchParams.append("page", page.toString());
   url.searchParams.append("limit", limit.toString());
 
