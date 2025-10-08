@@ -237,8 +237,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter to only selected prospects if provided
       let prospectsToImport = fetchResult.prospects;
       if (selectedProspectIds && Array.isArray(selectedProspectIds) && selectedProspectIds.length > 0) {
-        prospectsToImport = fetchResult.prospects.filter(p => selectedProspectIds.includes(p._id));
+        prospectsToImport = fetchResult.prospects.filter(p => selectedProspectIds.includes(String(p.id)));
       }
+
+      console.log(`Saleshandy import: ${prospectsToImport.length} prospects to import`);
 
       const importResults = {
         imported: [] as any[],
