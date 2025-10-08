@@ -89,6 +89,15 @@ export async function fetchSaleshandyProspects(
 
   console.log("Total prospects from API:", allProspects.length);
   
+  // Log all unique attribute keys to see what's available
+  const allAttributeKeys = new Set();
+  allProspects.forEach((prospect) => {
+    prospect.attributes?.forEach((attr: { key: string; value: string }) => {
+      allAttributeKeys.add(attr.key);
+    });
+  });
+  console.log("All available attribute keys:", Array.from(allAttributeKeys));
+  
   // Log the unique "Latest Status" values to see what's available
   const statusValues = new Set();
   allProspects.forEach((prospect) => {
