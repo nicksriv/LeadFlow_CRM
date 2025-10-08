@@ -50,8 +50,8 @@ export async function fetchSaleshandyProspects(
   }
 
   const url = new URL("https://open-api.saleshandy.com/v1/prospects");
-  // Try filtering by status "Replied"
-  url.searchParams.append("status", "Replied");
+  // Note: The /v1/prospects endpoint does not support status filtering
+  // and does not include sequence status in the response
   // Try without pagination parameters to see what API returns
   // url.searchParams.append("page", page.toString());
   // url.searchParams.append("limit", limit.toString());
