@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link, useLocation } from "wouter";
-import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp, Sparkles, Lightbulb, MessageSquare, Activity as ActivityIcon } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp, Sparkles, Lightbulb, MessageSquare, Activity as ActivityIcon, Linkedin, Globe, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
@@ -248,9 +248,64 @@ export default function LeadDetail() {
                     <span>{lead.position}</span>
                   </div>
                 )}
+
+                {lead.linkedinUrl && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Linkedin className="h-4 w-4 text-muted-foreground" />
+                    <a
+                      href={lead.linkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                      data-testid="link-linkedin"
+                    >
+                      LinkedIn Profile
+                    </a>
+                  </div>
+                )}
+
+                {lead.website && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <a
+                      href={lead.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                      data-testid="link-website"
+                    >
+                      Website
+                    </a>
+                  </div>
+                )}
+
+                {lead.lineOfBusiness && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <span data-testid="text-line-of-business">{lead.lineOfBusiness}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
+
+          {lead.customFields && Object.keys(lead.customFields).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Custom Fields</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {Object.entries(lead.customFields as Record<string, any>).map(([key, value]) => (
+                    <div key={key} className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">{key}:</span>
+                      <span data-testid={`text-custom-field-${key}`}>{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

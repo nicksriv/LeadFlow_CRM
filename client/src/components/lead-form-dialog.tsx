@@ -59,7 +59,7 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
       position: lead?.position || "",
       linkedinUrl: lead?.linkedinUrl || "",
       website: lead?.website || "",
-      lineOfBusiness: lead?.lineOfBusiness || undefined,
+      lineOfBusiness: (lead?.lineOfBusiness as typeof lineOfBusinessOptions[number]) || undefined,
       ownerId: lead?.ownerId || undefined,
       notes: lead?.notes || "",
       tags: lead?.tags || [],
