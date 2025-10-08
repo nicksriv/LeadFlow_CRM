@@ -89,6 +89,11 @@ export async function fetchSaleshandyProspects(
 
   console.log("Total prospects from API:", allProspects.length);
   
+  // Log the first prospect to see its structure
+  if (allProspects.length > 0) {
+    console.log("First prospect structure:", JSON.stringify(allProspects[0], null, 2));
+  }
+  
   // Log all unique attribute keys to see what's available
   const allAttributeKeys = new Set();
   allProspects.forEach((prospect) => {
