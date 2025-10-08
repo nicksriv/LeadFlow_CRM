@@ -89,26 +89,24 @@ export async function fetchSaleshandyProspects(
     allProspects = rawData.prospects;
   }
 
-  console.log("Total prospects from API:", allProspects.length);
+  console.log("Total prospects from Saleshandy API:", allProspects.length);
+
+  // Implement client-side pagination since API returns all prospects
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedProspects = allProspects.slice(startIndex, endIndex);
   
-  // Log all unique tag names to see what's available
-  const allTagNames = new Set();
-  allProspects.forEach((prospect: any) => {
-    prospect.tags?.forEach((tag: any) => {
-      if (tag.name) {
-        allTagNames.add(tag.name);
-      }
-    });
-  });
-  console.log("All available tag names:", Array.from(allTagNames));
+  const totalPages = Math.ceil(allProspects.length / limit);
+
+  console.log(`Returning page ${page} of ${totalPages} (${paginatedProspects.length} prospects)`);
 
   return {
-    prospects: allProspects,
+    prospects: paginatedProspects,
     pagination: {
       total: allProspects.length,
-      page: 1,
-      limit: allProspects.length,
-      totalPages: 1,
+      page: page,
+      limit: limit,
+      totalPages: totalPages,
     },
   };
 }

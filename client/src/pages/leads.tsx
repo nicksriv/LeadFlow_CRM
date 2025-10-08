@@ -502,7 +502,7 @@ function SaleshandyImportTab({ onClose }: { onClose: () => void }) {
   const { isLoading: isFetching } = useQuery({
     queryKey: ["/api/integrations/saleshandy/prospects", page],
     queryFn: async () => {
-      const response = await fetch(`/api/integrations/saleshandy/prospects?page=${page}&limit=50`);
+      const response = await fetch(`/api/integrations/saleshandy/prospects?page=${page}&limit=20`);
       if (!response.ok) throw new Error("Failed to fetch prospects");
       const data = await response.json();
       setProspects(data.prospects || []);
@@ -518,7 +518,7 @@ function SaleshandyImportTab({ onClose }: { onClose: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           page,
-          limit: 50,
+          limit: 20,
           selectedProspectIds: Array.from(selectedProspects),
         }),
       });
