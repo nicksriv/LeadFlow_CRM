@@ -7,6 +7,21 @@ import { z } from "zod";
 export const leadStatuses = ["cold", "warm", "hot"] as const;
 export type LeadStatus = typeof leadStatuses[number];
 
+// Line of business options
+export const lineOfBusinessOptions = [
+  "Technology",
+  "Healthcare",
+  "Finance",
+  "Manufacturing",
+  "Retail",
+  "Education",
+  "Real Estate",
+  "Professional Services",
+  "Marketing & Advertising",
+  "Other"
+] as const;
+export type LineOfBusiness = typeof lineOfBusinessOptions[number];
+
 // Leads table
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -15,6 +30,9 @@ export const leads = pgTable("leads", {
   company: text("company"),
   phone: text("phone"),
   position: text("position"),
+  linkedinUrl: text("linkedin_url"),
+  lineOfBusiness: text("line_of_business"),
+  website: text("website"),
   status: text("status").notNull().default("cold"), // cold, warm, hot
   score: integer("score").notNull().default(0), // 0-100
   ownerId: varchar("owner_id").references(() => users.id), // Lead owner/assigned sales rep
@@ -23,6 +41,7 @@ export const leads = pgTable("leads", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   notes: text("notes"),
   tags: text("tags").array().default(sql`ARRAY[]::text[]`),
+  customFields: jsonb("custom_fields").default(sql`'{}'::jsonb`), // Custom data storage
 });
 
 // Conversations table (email threads)
@@ -358,6 +377,10 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 }).extend({
   score: z.number().min(0).max(100).optional(),
   status: z.enum(leadStatuses).optional(),
+  linkedinUrl: z.string().url().optional().or(z.literal("")),
+  website: z.string().url().optional().or(z.literal("")),
+  lineOfBusiness: z.enum(lineOfBusinessOptions).optional(),
+  customFields: z.record(z.string(), z.any()).optional(),
 });
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({

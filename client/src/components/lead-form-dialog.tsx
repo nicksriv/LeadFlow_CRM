@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { insertLeadSchema, type InsertLead, type Lead, type User } from "@shared/schema";
+import { insertLeadSchema, type InsertLead, type Lead, type User, lineOfBusinessOptions } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+import { Plus, X } from "lucide-react";
 
 interface LeadFormDialogProps {
   open: boolean;
@@ -39,6 +42,13 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
 
   const salesUsers = users.filter(u => u.role === "sales_rep" || u.role === "sales_manager");
 
+  // Custom fields state management
+  const [customFieldKey, setCustomFieldKey] = useState("");
+  const [customFieldValue, setCustomFieldValue] = useState("");
+  const [customFields, setCustomFields] = useState<Record<string, any>>(
+    (lead?.customFields as Record<string, any>) || {}
+  );
+
   const form = useForm<InsertLead>({
     resolver: zodResolver(insertLeadSchema),
     defaultValues: {
@@ -47,11 +57,32 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
       company: lead?.company || "",
       phone: lead?.phone || "",
       position: lead?.position || "",
+      linkedinUrl: lead?.linkedinUrl || "",
+      website: lead?.website || "",
+      lineOfBusiness: lead?.lineOfBusiness || undefined,
       ownerId: lead?.ownerId || undefined,
       notes: lead?.notes || "",
       tags: lead?.tags || [],
+      customFields: (lead?.customFields as Record<string, any>) || {},
     },
   });
+
+  const addCustomField = () => {
+    if (customFieldKey.trim() && customFieldValue.trim()) {
+      const newFields = { ...customFields, [customFieldKey.trim()]: customFieldValue.trim() };
+      setCustomFields(newFields);
+      form.setValue("customFields", newFields);
+      setCustomFieldKey("");
+      setCustomFieldValue("");
+    }
+  };
+
+  const removeCustomField = (key: string) => {
+    const newFields = { ...customFields };
+    delete newFields[key];
+    setCustomFields(newFields);
+    form.setValue("customFields", newFields);
+  };
 
   const mutation = useMutation({
     mutationFn: async (data: InsertLead) => {
@@ -229,6 +260,76 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
               />
             </div>
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="linkedinUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>LinkedIn URL</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="url"
+                        placeholder="https://linkedin.com/in/johndoe"
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-lead-linkedin"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="website"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Website</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="url"
+                        placeholder="https://example.com"
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-lead-website"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="lineOfBusiness"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Line of Business</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ""}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-lead-line-of-business">
+                        <SelectValue placeholder="Select industry" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {lineOfBusinessOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="notes"
@@ -248,6 +349,64 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
                 </FormItem>
               )}
             />
+
+            <div className="space-y-3">
+              <div>
+                <FormLabel>Custom Fields</FormLabel>
+                <FormDescription>
+                  Add custom data fields for this lead
+                </FormDescription>
+              </div>
+              
+              {Object.keys(customFields).length > 0 && (
+                <div className="space-y-2">
+                  {Object.entries(customFields).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center gap-2 p-2 rounded-md bg-muted"
+                    >
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <span className="text-sm font-medium">{key}:</span>
+                        <span className="text-sm text-muted-foreground">{String(value)}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeCustomField(key)}
+                        data-testid={`button-remove-custom-field-${key}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Field name"
+                  value={customFieldKey}
+                  onChange={(e) => setCustomFieldKey(e.target.value)}
+                  data-testid="input-custom-field-key"
+                />
+                <Input
+                  placeholder="Field value"
+                  value={customFieldValue}
+                  onChange={(e) => setCustomFieldValue(e.target.value)}
+                  data-testid="input-custom-field-value"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addCustomField}
+                  disabled={!customFieldKey.trim() || !customFieldValue.trim()}
+                  data-testid="button-add-custom-field"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
 
             <div className="flex justify-end gap-3 pt-4">
               <Button
