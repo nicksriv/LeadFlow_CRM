@@ -83,6 +83,8 @@ export async function fetchSaleshandyProspects(
   }
 
   const data: SaleshandyProspectsResponse = await response.json();
+  
+  console.log("Saleshandy API Response:", JSON.stringify(data, null, 2));
 
   return {
     prospects: data.data.prospects || [],
