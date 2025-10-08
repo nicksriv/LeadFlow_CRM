@@ -322,6 +322,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // LinkedIn enrichment route
+  app.post("/api/integrations/linkedin/enrich", async (req, res) => {
+    try {
+      const { fetchLinkedInProfile, mapLinkedInProfileToLead } = await import("./linkedin-enrichment");
+      const { linkedinUrl } = req.body;
+
+      if (!linkedinUrl) {
+        return res.status(400).json({ error: "LinkedIn URL is required" });
+      }
+
+      console.log(`LinkedIn enrichment requested for: ${linkedinUrl}`);
+
+      // Fetch LinkedIn profile data
+      const profileData = await fetchLinkedInProfile(linkedinUrl);
+      
+      if (!profileData) {
+        return res.status(404).json({ error: "Failed to fetch LinkedIn profile data" });
+      }
+
+      // Map to lead format
+      const leadData = mapLinkedInProfileToLead(profileData);
+
+      res.json({
+        success: true,
+        data: leadData,
+        profileData, // Include raw profile data for debugging
+      });
+    } catch (error: any) {
+      console.error("LinkedIn enrichment error:", error);
+      res.status(500).json({ 
+        error: error.message || "Failed to enrich LinkedIn profile",
+        details: error.toString(),
+      });
+    }
+  });
+
   // Conversation routes
   app.get("/api/conversations", async (req, res) => {
     try {
