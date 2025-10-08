@@ -89,7 +89,18 @@ export async function fetchSaleshandyProspects(
     allProspects = rawData.prospects;
   }
 
-  console.log("Total prospects from API (status=Replied filter):", allProspects.length);
+  console.log("Total prospects from API:", allProspects.length);
+  
+  // Log all unique tag names to see what's available
+  const allTagNames = new Set();
+  allProspects.forEach((prospect: any) => {
+    prospect.tags?.forEach((tag: any) => {
+      if (tag.name) {
+        allTagNames.add(tag.name);
+      }
+    });
+  });
+  console.log("All available tag names:", Array.from(allTagNames));
 
   return {
     prospects: allProspects,
