@@ -89,6 +89,18 @@ export async function fetchSaleshandyProspects(
 
   console.log("Total prospects from API:", allProspects.length);
   
+  // Log the unique "Latest Status" values to see what's available
+  const statusValues = new Set();
+  allProspects.forEach((prospect) => {
+    const latestStatusAttr = prospect.attributes?.find(
+      (attr: { key: string; value: string }) => attr.key === "Latest Status"
+    );
+    if (latestStatusAttr?.value) {
+      statusValues.add(latestStatusAttr.value);
+    }
+  });
+  console.log("Available 'Latest Status' values:", Array.from(statusValues));
+  
   // Filter prospects to only show those with "Latest Status" = "replied"
   const prospects = allProspects.filter((prospect) => {
     const latestStatusAttr = prospect.attributes?.find(
