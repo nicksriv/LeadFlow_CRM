@@ -82,6 +82,8 @@ export async function fetchSaleshandyProspects(
   
   if (Array.isArray(rawData)) {
     prospects = rawData;
+  } else if (rawData.payload && Array.isArray(rawData.payload)) {
+    prospects = rawData.payload;
   } else if (rawData.data && Array.isArray(rawData.data)) {
     prospects = rawData.data;
   } else if (rawData.prospects && Array.isArray(rawData.prospects)) {
