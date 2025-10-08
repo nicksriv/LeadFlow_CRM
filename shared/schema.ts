@@ -122,6 +122,34 @@ export const syncState = pgTable("sync_state", {
   expiresAt: timestamp("expires_at"),
 });
 
+// Apollo.io enrichment tracking
+export const apolloEnrichments = pgTable("apollo_enrichments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  enrichedAt: timestamp("enriched_at").notNull().defaultNow(),
+  enrichmentData: jsonb("enrichment_data"), // Store full Apollo response
+  fieldsEnriched: text("fields_enriched").array().default(sql`ARRAY[]::text[]`), // Track which fields were enriched
+  creditsUsed: integer("credits_used").notNull().default(1),
+  status: text("status").notNull().default("success"), // success, failed, partial
+  errorMessage: text("error_message"),
+});
+
+// Saleshandy sequence tracking
+export const saleshandySequences = pgTable("saleshandy_sequences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+  sequenceId: text("sequence_id").notNull(), // Saleshandy sequence ID
+  sequenceName: text("sequence_name").notNull(),
+  stepId: text("step_id"), // Current step in sequence
+  status: text("status").notNull().default("active"), // active, paused, completed, unsubscribed
+  addedAt: timestamp("added_at").notNull().defaultNow(),
+  lastActivityAt: timestamp("last_activity_at"),
+  emailsSent: integer("emails_sent").notNull().default(0),
+  emailsOpened: integer("emails_opened").notNull().default(0),
+  emailsClicked: integer("emails_clicked").notNull().default(0),
+  emailsReplied: integer("emails_replied").notNull().default(0),
+});
+
 // Email templates
 export const emailTemplates = pgTable("email_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -515,6 +543,16 @@ export const insertDealStageHistorySchema = createInsertSchema(dealStageHistory)
   createdAt: true,
 });
 
+export const insertApolloEnrichmentSchema = createInsertSchema(apolloEnrichments).omit({
+  id: true,
+  enrichedAt: true,
+});
+
+export const insertSaleshandySequenceSchema = createInsertSchema(saleshandySequences).omit({
+  id: true,
+  addedAt: true,
+});
+
 // Types
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
@@ -550,6 +588,10 @@ export type Deal = typeof deals.$inferSelect;
 export type InsertDeal = z.infer<typeof insertDealSchema>;
 export type DealStageHistory = typeof dealStageHistory.$inferSelect;
 export type InsertDealStageHistory = z.infer<typeof insertDealStageHistorySchema>;
+export type ApolloEnrichment = typeof apolloEnrichments.$inferSelect;
+export type InsertApolloEnrichment = z.infer<typeof insertApolloEnrichmentSchema>;
+export type SaleshandySequence = typeof saleshandySequences.$inferSelect;
+export type InsertSaleshandySequence = z.infer<typeof insertSaleshandySequenceSchema>;
 
 // Extended types with relations
 export type LeadWithRelations = Lead & {
