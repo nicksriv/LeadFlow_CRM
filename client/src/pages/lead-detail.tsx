@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link, useLocation } from "wouter";
-import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp, Sparkles, Lightbulb, MessageSquare, Activity as ActivityIcon, Linkedin, Globe, Tag, Database, Send } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Briefcase, Edit, Trash2, CheckCircle2, Clock, TrendingUp, Sparkles, Lightbulb, MessageSquare, Activity as ActivityIcon, Linkedin, Globe, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
@@ -121,50 +121,6 @@ export default function LeadDetail() {
     },
   });
 
-  const enrichLeadMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", `/api/leads/${leadId}/enrich-apollo`, {});
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId] });
-      toast({
-        title: "Lead enriched successfully",
-        description: `Updated ${data.enrichedFields.length} fields from Apollo.io`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Enrichment failed",
-        description: error.message || "Could not enrich lead data",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const [sequenceDialogOpen, setSequenceDialogOpen] = useState(false);
-  const [sequenceStepId, setSequenceStepId] = useState("");
-
-  const addToSequenceMutation = useMutation({
-    mutationFn: async ({ sequenceStepId }: { sequenceStepId: string }) => {
-      return apiRequest("POST", `/api/leads/${leadId}/add-to-sequence`, { sequenceStepId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId] });
-      toast({
-        title: "Added to sequence",
-        description: "Lead has been added to the email sequence",
-      });
-      setSequenceDialogOpen(false);
-      setSequenceStepId("");
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to add to sequence",
-        description: error.message || "Could not add lead to sequence",
-        variant: "destructive",
-      });
-    },
-  });
 
   if (isLoading) {
     return (
@@ -222,23 +178,6 @@ export default function LeadDetail() {
             leadName={lead.name}
           />
           <TaskDialog leadId={lead.id} />
-          <Button
-            variant="outline"
-            onClick={() => enrichLeadMutation.mutate()}
-            disabled={enrichLeadMutation.isPending}
-            data-testid="button-enrich-lead"
-          >
-            <Database className="h-4 w-4 mr-2" />
-            {enrichLeadMutation.isPending ? "Enriching..." : "Enrich with Apollo"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setSequenceDialogOpen(true)}
-            data-testid="button-add-to-sequence"
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Add to Sequence
-          </Button>
           <Button
             variant="outline"
             onClick={() => setIsEditOpen(true)}
@@ -964,14 +903,6 @@ export default function LeadDetail() {
         onSuccess={(dealId) => navigate(`/deals/${dealId}`)}
       />
 
-      <SequenceDialog
-        open={sequenceDialogOpen}
-        onOpenChange={setSequenceDialogOpen}
-        sequenceStepId={sequenceStepId}
-        onSequenceStepIdChange={setSequenceStepId}
-        onConfirm={() => addToSequenceMutation.mutate({ sequenceStepId })}
-        isPending={addToSequenceMutation.isPending}
-      />
     </div>
   );
 }
@@ -1186,63 +1117,6 @@ function ConvertToDealDialog({
             </div>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SequenceDialog({
-  open,
-  onOpenChange,
-  sequenceStepId,
-  onSequenceStepIdChange,
-  onConfirm,
-  isPending,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  sequenceStepId: string;
-  onSequenceStepIdChange: (id: string) => void;
-  onConfirm: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add to Email Sequence</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Sequence Step ID</label>
-            <Input
-              value={sequenceStepId}
-              onChange={(e) => onSequenceStepIdChange(e.target.value)}
-              placeholder="Enter Saleshandy sequence step ID"
-              data-testid="input-sequence-step-id"
-            />
-            <p className="text-sm text-muted-foreground">
-              Find the step ID in your Saleshandy sequence settings
-            </p>
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              data-testid="button-cancel-sequence"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={onConfirm}
-              disabled={!sequenceStepId || isPending}
-              data-testid="button-confirm-sequence"
-            >
-              {isPending ? "Adding..." : "Add to Sequence"}
-            </Button>
-          </div>
-        </div>
       </DialogContent>
     </Dialog>
   );
