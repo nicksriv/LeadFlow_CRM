@@ -22,35 +22,51 @@ The application is built with a modern tech stack:
 ## External Dependencies
 - **OpenAI GPT-5**: Used for all AI-powered features, including lead scoring, conversation analysis, summarization, email drafting, and predictive analytics.
 - **Microsoft Graph API**: Utilized for Microsoft 365 mailbox integration, including OAuth 2.0 authentication, email synchronization (fetching and sending), and real-time webhook notifications.
-- **Apollo.io API**: Integrated for lead enrichment with contact data, company information, and social profiles. Requires paid API plan for full access to the `/v1/people/match` endpoint. Enrichment data is tracked in the `enrichmentHistory` table.
-- **Saleshandy API**: Integrated for adding leads to email sequences for cold email campaigns. Leads can be added to sequences via the `/v1/prospects` endpoint with sequence step IDs. Campaign prospect data is tracked in the `campaignProspects` table.
+- **Apollo.io API**: Integrated for importing leads from Apollo.io's database (210M+ contacts). Uses POST `/api/v1/mixed_people/search` endpoint to search and import contacts. Requires paid API plan for full access. Import data is tracked in the `enrichmentHistory` table.
+- **Saleshandy API**: Integrated for importing prospects from Saleshandy email sequences. Uses GET `/api/v1/prospects` endpoint to fetch and import prospects. Import data is tracked in the `campaignProspects` table.
 - **PostgreSQL**: The primary relational database for all application data storage.
 
 ## Recent Updates (October 8, 2025)
 
-### Apollo.io Integration
-- **Backend Implementation**: `server/apollo.ts` handles lead enrichment via Apollo.io's Person Enrichment API
-- **API Endpoint**: POST `/api/leads/:id/enrich-apollo` triggers enrichment for a specific lead
-- **Data Enrichment**: Automatically enriches firstName, lastName, position, LinkedIn/Twitter/Facebook URLs, location (city, state, country), phone, and company information
-- **Tracking**: All enrichment attempts are logged in the `enrichmentHistory` table with status, enriched fields, credits used, and error messages
-- **UI Integration**: Lead detail page includes "Enrich with Apollo" button with loading states and success/error toasts
+### Apollo.io Integration (Pull-Based Import)
+- **Backend Implementation**: `server/apollo.ts` implements pull-based import from Apollo.io's contact database
+- **Search Endpoint**: POST `/api/integrations/apollo/search` - searches Apollo database with filters (job titles, locations, company names, seniority)
+- **Import Endpoint**: POST `/api/integrations/apollo/import` - imports selected contacts from search results
+- **Search Filters**: Supports filtering by person titles, person locations, person seniorities, organization names, organization locations, industry tags, and employee count ranges
+- **Pagination**: Handles up to 100 contacts per page
+- **Data Mapping**: Maps Apollo contact data to Lead schema (personal info, work info, social profiles, location, company info)
+- **Duplicate Detection**: Checks for existing leads by email before importing to prevent duplicates
+- **Tracking**: All imports are logged in the `enrichmentHistory` table with import data, imported fields, and status
+- **UI Integration**: Leads page includes "Import Leads" button that opens a dialog with Apollo tab for searching and importing
 - **Error Handling**: Gracefully handles API errors, missing data, and API plan limitations
 
-### Saleshandy Integration
-- **Backend Implementation**: `server/saleshandy.ts` handles adding leads to email sequences
-- **API Endpoint**: POST `/api/leads/:id/add-to-sequence` with `sequenceStepId` parameter
-- **Data Mapping**: Automatically maps lead fields (email, firstName, lastName, company, position, phone, location, social profiles) to Saleshandy prospect fields
-- **Tracking**: All sequence additions are logged in the `campaignProspects` table with sequence step ID, prospect ID, status, and timestamps
-- **UI Integration**: Lead detail page includes "Add to Sequence" button that opens a dialog for manual sequence step ID entry
+### Saleshandy Integration (Pull-Based Import)
+- **Backend Implementation**: `server/saleshandy.ts` implements pull-based import from Saleshandy prospects
+- **Fetch Endpoint**: GET `/api/integrations/saleshandy/prospects` - fetches prospects from Saleshandy with pagination
+- **Import Endpoint**: POST `/api/integrations/saleshandy/import` - imports selected prospects
+- **Pagination**: Supports pagination with configurable page size (default 50 prospects per page)
+- **Data Mapping**: Maps Saleshandy prospect fields to Lead schema (email, name, position, company, phone, location, social profiles)
+- **Duplicate Detection**: Checks for existing leads by email before importing to prevent duplicates
+- **Tracking**: All imports are logged in the `campaignProspects` table with import data and status
+- **UI Integration**: Leads page includes "Import Leads" button with Saleshandy tab for viewing and importing prospects
 - **Error Handling**: Validates email presence, handles API errors, and provides clear error messages to users
 
-### Database Schema Extensions
-- **enrichmentHistory Table**: Tracks all Apollo enrichment attempts with JSONB enrichment data, array of enriched fields, credits used, status, and error messages
-- **campaignProspects Table**: Tracks Saleshandy sequence assignments with sequence step ID, Saleshandy prospect ID, status, and timestamps
+### Import UI Features
+- **Dual-Tab Dialog**: Import dialog with tabs for Apollo.io and Saleshandy imports
+- **Apollo Tab**: Search filters for job titles, locations, and company names; displays search results with checkbox selection; "Select All" functionality; shows import results (imported, skipped, errors)
+- **Saleshandy Tab**: Auto-fetches prospects on load; displays prospects with checkbox selection; pagination controls; shows import results
+- **Import Results**: Visual feedback showing imported count, skipped count (duplicates/missing email), and error count
+- **Loading States**: Proper loading indicators during search, fetch, and import operations
+- **Toast Notifications**: Success and error toasts for all operations
+
+### Database Schema Usage
+- **enrichmentHistory Table**: Repurposed to track Apollo import attempts with JSONB import data, array of imported fields, credits used, status, and error messages
+- **campaignProspects Table**: Repurposed to track Saleshandy imports with prospect ID, import data, status, and timestamps
 
 ### Integration Notes
 - API keys are stored in Replit Secrets (APOLLO_API_KEY, SALESHANDY_API_KEY)
-- Apollo.io free plan has limitations on API endpoint access - paid plan required for full functionality
-- Saleshandy requires valid sequence step IDs which must be obtained from the Saleshandy dashboard
+- Apollo.io requires paid plan for `/api/v1/mixed_people/search` endpoint access
+- Saleshandy endpoint: `https://open-api.saleshandy.com/api/v1/prospects`
 - Both integrations include comprehensive error handling and user feedback via toasts
-- Database tracking tables enable audit trails and integration history
+- Database tracking tables enable audit trails and import history
+- Duplicate detection prevents importing leads that already exist in the CRM (matched by email)
