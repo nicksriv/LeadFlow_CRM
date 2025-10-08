@@ -322,37 +322,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // LinkedIn enrichment route
-  app.post("/api/integrations/linkedin/enrich", async (req, res) => {
+  // LinkedIn screenshot OCR route
+  app.post("/api/integrations/linkedin/screenshot", async (req, res) => {
     try {
-      const { fetchLinkedInProfile, mapLinkedInProfileToLead } = await import("./linkedin-enrichment");
-      const { linkedinUrl } = req.body;
+      const { extractLeadFromScreenshot, mapScreenshotDataToLead } = await import("./linkedin-ocr");
+      const { imageBase64 } = req.body;
 
-      if (!linkedinUrl) {
-        return res.status(400).json({ error: "LinkedIn URL is required" });
+      if (!imageBase64) {
+        return res.status(400).json({ error: "Screenshot image is required" });
       }
 
-      console.log(`LinkedIn enrichment requested for: ${linkedinUrl}`);
+      console.log("LinkedIn screenshot OCR requested");
 
-      // Fetch LinkedIn profile data
-      const profileData = await fetchLinkedInProfile(linkedinUrl);
+      // Extract lead data from screenshot using OpenAI Vision
+      const extractedData = await extractLeadFromScreenshot(imageBase64);
       
-      if (!profileData) {
-        return res.status(404).json({ error: "Failed to fetch LinkedIn profile data" });
-      }
-
       // Map to lead format
-      const leadData = mapLinkedInProfileToLead(profileData);
+      const leadData = mapScreenshotDataToLead(extractedData);
 
       res.json({
         success: true,
         data: leadData,
-        profileData, // Include raw profile data for debugging
+        extractedData, // Include raw extracted data for debugging
       });
     } catch (error: any) {
-      console.error("LinkedIn enrichment error:", error);
+      console.error("LinkedIn screenshot OCR error:", error);
       res.status(500).json({ 
-        error: error.message || "Failed to enrich LinkedIn profile",
+        error: error.message || "Failed to extract data from screenshot",
         details: error.toString(),
       });
     }
