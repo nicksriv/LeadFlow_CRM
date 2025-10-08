@@ -60,8 +60,9 @@ export async function fetchSaleshandyProspects(
   }
 
   const url = new URL("https://open-api.saleshandy.com/v1/prospects");
-  url.searchParams.append("page", page.toString());
-  url.searchParams.append("limit", limit.toString());
+  // Try without pagination parameters to see what API returns
+  // url.searchParams.append("page", page.toString());
+  // url.searchParams.append("limit", limit.toString());
 
   const response = await fetch(url.toString(), {
     method: "GET",
