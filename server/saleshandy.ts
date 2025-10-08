@@ -101,12 +101,13 @@ export async function fetchSaleshandyProspects(
   });
   console.log("Available 'Latest Status' values:", Array.from(statusValues));
   
-  // Filter prospects to only show those with "Latest Status" = "replied"
+  // Filter prospects to only show those with "Latest Status" = "Replied" (case-insensitive)
   const prospects = allProspects.filter((prospect) => {
     const latestStatusAttr = prospect.attributes?.find(
       (attr: { key: string; value: string }) => attr.key === "Latest Status"
     );
-    return latestStatusAttr?.value?.toLowerCase() === "replied";
+    const statusValue = latestStatusAttr?.value?.toLowerCase();
+    return statusValue === "replied";
   });
 
   console.log("Filtered prospects (Latest Status = replied):", prospects.length);
