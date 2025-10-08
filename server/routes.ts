@@ -91,6 +91,210 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Apollo.io import routes
+  app.post("/api/integrations/apollo/search", async (req, res) => {
+    try {
+      const { searchApolloContacts } = await import("./apollo");
+      const filters = req.body;
+
+      const result = await searchApolloContacts(filters);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/apollo/import", async (req, res) => {
+    try {
+      const { searchApolloContacts, mapApolloContactToLead } = await import("./apollo");
+      const { filters, selectedContactIds } = req.body;
+
+      // Search Apollo to get contacts
+      const searchResult = await searchApolloContacts(filters);
+      
+      // Filter to only selected contacts if provided
+      let contactsToImport = searchResult.contacts;
+      if (selectedContactIds && Array.isArray(selectedContactIds) && selectedContactIds.length > 0) {
+        contactsToImport = searchResult.contacts.filter(c => selectedContactIds.includes(c.id));
+      }
+
+      const importResults = {
+        imported: [] as any[],
+        skipped: [] as any[],
+        errors: [] as any[],
+      };
+
+      // Import each contact
+      for (const contact of contactsToImport) {
+        try {
+          // Map Apollo contact to Lead
+          const leadData = mapApolloContactToLead(contact);
+
+          // Check for duplicate by email
+          if (leadData.email) {
+            const existingLeads = await storage.getLeads();
+            const duplicate = existingLeads.find(l => l.email === leadData.email);
+            
+            if (duplicate) {
+              importResults.skipped.push({
+                contact,
+                reason: `Lead with email ${leadData.email} already exists`,
+                existingLeadId: duplicate.id,
+              });
+              continue;
+            }
+          }
+
+          // Create the lead
+          const newLead = await storage.createLead(leadData as any);
+
+          // Track import in enrichmentHistory table (repurposing for import tracking)
+          await storage.createApolloEnrichment({
+            leadId: newLead.id,
+            enrichmentData: contact,
+            fieldsEnriched: Object.keys(leadData),
+            creditsUsed: 1,
+            status: "success",
+            errorMessage: null,
+          });
+
+          // Create activity
+          await storage.createActivity({
+            leadId: newLead.id,
+            type: "lead_created",
+            description: `Lead imported from Apollo.io`,
+            metadata: { source: "apollo", apolloContactId: contact.id },
+          });
+
+          importResults.imported.push(newLead);
+        } catch (error: any) {
+          importResults.errors.push({
+            contact,
+            error: error.message,
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        imported: importResults.imported.length,
+        skipped: importResults.skipped.length,
+        errors: importResults.errors.length,
+        details: importResults,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Saleshandy import routes
+  app.get("/api/integrations/saleshandy/prospects", async (req, res) => {
+    try {
+      const { fetchSaleshandyProspects } = await import("./saleshandy");
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 100;
+
+      const result = await fetchSaleshandyProspects(page, limit);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/integrations/saleshandy/import", async (req, res) => {
+    try {
+      const { fetchSaleshandyProspects, mapSaleshandyProspectToLead } = await import("./saleshandy");
+      const { page, limit, selectedProspectIds } = req.body;
+
+      // Fetch Saleshandy prospects
+      const fetchResult = await fetchSaleshandyProspects(page || 1, limit || 100);
+      
+      // Filter to only selected prospects if provided
+      let prospectsToImport = fetchResult.prospects;
+      if (selectedProspectIds && Array.isArray(selectedProspectIds) && selectedProspectIds.length > 0) {
+        prospectsToImport = fetchResult.prospects.filter(p => selectedProspectIds.includes(p._id));
+      }
+
+      const importResults = {
+        imported: [] as any[],
+        skipped: [] as any[],
+        errors: [] as any[],
+      };
+
+      // Import each prospect
+      for (const prospect of prospectsToImport) {
+        try {
+          // Map Saleshandy prospect to Lead
+          const leadData = mapSaleshandyProspectToLead(prospect);
+
+          // Check for duplicate by email
+          if (leadData.email) {
+            const existingLeads = await storage.getLeads();
+            const duplicate = existingLeads.find(l => l.email === leadData.email);
+            
+            if (duplicate) {
+              importResults.skipped.push({
+                prospect,
+                reason: `Lead with email ${leadData.email} already exists`,
+                existingLeadId: duplicate.id,
+              });
+              continue;
+            }
+          } else {
+            // Skip prospects without email
+            importResults.skipped.push({
+              prospect,
+              reason: "Prospect has no email address",
+            });
+            continue;
+          }
+
+          // Create the lead
+          const newLead = await storage.createLead(leadData as any);
+
+          // Track import in campaignProspects table (repurposing for import tracking)
+          await storage.createSaleshandySequence({
+            leadId: newLead.id,
+            sequenceId: prospect._id,
+            sequenceName: "Imported from Saleshandy",
+            stepId: prospect._id,
+            status: prospect.status || "active",
+            lastActivityAt: prospect.updatedAt ? new Date(prospect.updatedAt) : null,
+            emailsSent: 0,
+            emailsOpened: 0,
+            emailsClicked: 0,
+            emailsReplied: 0,
+          });
+
+          // Create activity
+          await storage.createActivity({
+            leadId: newLead.id,
+            type: "lead_created",
+            description: `Lead imported from Saleshandy`,
+            metadata: { source: "saleshandy", saleshandyProspectId: prospect._id },
+          });
+
+          importResults.imported.push(newLead);
+        } catch (error: any) {
+          importResults.errors.push({
+            prospect,
+            error: error.message,
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        imported: importResults.imported.length,
+        skipped: importResults.skipped.length,
+        errors: importResults.errors.length,
+        details: importResults,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Conversation routes
   app.get("/api/conversations", async (req, res) => {
     try {

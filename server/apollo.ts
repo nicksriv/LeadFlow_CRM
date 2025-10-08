@@ -1,6 +1,23 @@
 import type { Lead } from "@shared/schema";
 
-interface ApolloPersonMatch {
+interface ApolloSearchFilters {
+  // Person filters
+  personTitles?: string[];
+  personSeniorities?: string[];
+  personLocations?: string[];
+  
+  // Organization filters
+  organizationNames?: string[];
+  organizationLocations?: string[];
+  organizationIndustryTagIds?: string[];
+  organizationNumEmployeesRanges?: string[];
+  
+  // Pagination
+  page?: number;
+  perPage?: number;
+}
+
+interface ApolloPerson {
   id: string;
   first_name?: string;
   last_name?: string;
@@ -8,7 +25,7 @@ interface ApolloPersonMatch {
   email?: string;
   headline?: string;
   title?: string;
-  organization_name?: string;
+  seniority?: string;
   linkedin_url?: string;
   twitter_url?: string;
   facebook_url?: string;
@@ -36,81 +53,81 @@ interface ApolloPersonMatch {
   };
 }
 
-interface ApolloEnrichmentResponse {
-  person?: ApolloPersonMatch;
-  organization?: {
-    name?: string;
-    website_url?: string;
-    domain?: string;
-    linkedin_url?: string;
-    industry?: string;
-    num_employees_enum?: string;
-    estimated_num_employees?: number;
-    founded_year?: number;
-    primary_phone?: {
-      number?: string;
-    };
+interface ApolloSearchResponse {
+  people: ApolloPerson[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total_entries: number;
+    total_pages: number;
   };
 }
 
-export interface EnrichmentResult {
-  enrichedFields: string[];
-  data: Partial<Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>>;
-  apolloResponse: any;
+export interface ApolloImportResult {
+  contacts: ApolloPerson[];
+  pagination: {
+    page: number;
+    perPage: number;
+    totalEntries: number;
+    totalPages: number;
+  };
 }
 
 /**
- * Enrich a lead using Apollo.io People Enrichment API
+ * Search Apollo.io database for contacts using advanced filters
+ * Uses POST /api/v1/mixed_people/search endpoint
  */
-export async function enrichLeadWithApollo(lead: Lead): Promise<EnrichmentResult> {
+export async function searchApolloContacts(filters: ApolloSearchFilters): Promise<ApolloImportResult> {
   const apiKey = process.env.APOLLO_API_KEY;
   
   if (!apiKey) {
     throw new Error("Apollo API key not configured");
   }
 
-  // Build the match request based on available lead data
-  const matchParams: any = {};
-  
-  if (lead.email) {
-    matchParams.email = lead.email;
-  }
-  
-  if (lead.firstName && lead.lastName) {
-    matchParams.first_name = lead.firstName;
-    matchParams.last_name = lead.lastName;
-  } else if (lead.name) {
-    const nameParts = lead.name.split(" ");
-    if (nameParts.length >= 2) {
-      matchParams.first_name = nameParts[0];
-      matchParams.last_name = nameParts.slice(1).join(" ");
-    }
-  }
-  
-  if (lead.company) {
-    matchParams.organization_name = lead.company;
-  }
-  
-  if (lead.companyDomain) {
-    matchParams.domain = lead.companyDomain;
+  // Build the search request payload
+  const payload: any = {
+    page: filters.page || 1,
+    per_page: filters.perPage || 100, // Max 100 per page
+  };
+
+  // Add person filters
+  if (filters.personTitles && filters.personTitles.length > 0) {
+    payload.person_titles = filters.personTitles;
   }
 
-  if (lead.linkedinUrl) {
-    matchParams.linkedin_url = lead.linkedinUrl;
+  if (filters.personSeniorities && filters.personSeniorities.length > 0) {
+    payload.person_seniorities = filters.personSeniorities;
+  }
+
+  if (filters.personLocations && filters.personLocations.length > 0) {
+    payload.person_locations = filters.personLocations;
+  }
+
+  // Add organization filters
+  if (filters.organizationNames && filters.organizationNames.length > 0) {
+    payload.organization_names = filters.organizationNames;
+  }
+
+  if (filters.organizationLocations && filters.organizationLocations.length > 0) {
+    payload.organization_locations = filters.organizationLocations;
+  }
+
+  if (filters.organizationIndustryTagIds && filters.organizationIndustryTagIds.length > 0) {
+    payload.organization_industry_tag_ids = filters.organizationIndustryTagIds;
+  }
+
+  if (filters.organizationNumEmployeesRanges && filters.organizationNumEmployeesRanges.length > 0) {
+    payload.organization_num_employees_ranges = filters.organizationNumEmployeesRanges;
   }
 
   // Make the API request
-  const response = await fetch("https://api.apollo.io/v1/people/match", {
+  const response = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
     },
-    body: JSON.stringify({
-      ...matchParams,
-      reveal_personal_emails: true,
-      reveal_phone_number: true,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -118,208 +135,121 @@ export async function enrichLeadWithApollo(lead: Lead): Promise<EnrichmentResult
     throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
   }
 
-  const apolloData: ApolloEnrichmentResponse = await response.json();
-  const person = apolloData.person;
-  
-  if (!person) {
-    throw new Error("No matching person found in Apollo database");
-  }
-
-  // Extract enriched data
-  const enrichedData: Partial<Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>> = {};
-  const enrichedFields: string[] = [];
-
-  // Personal information
-  if (person.first_name && !lead.firstName) {
-    enrichedData.firstName = person.first_name;
-    enrichedFields.push("firstName");
-  }
-  
-  if (person.last_name && !lead.lastName) {
-    enrichedData.lastName = person.last_name;
-    enrichedFields.push("lastName");
-  }
-  
-  if ((person.email && !lead.email) || (person.email && person.email !== lead.email)) {
-    enrichedData.email = person.email;
-    enrichedFields.push("email");
-  }
-
-  // Work information
-  if (person.title && !lead.position) {
-    enrichedData.position = person.title;
-    enrichedFields.push("position");
-  }
-
-  // Social profiles  
-  if (person.linkedin_url && !lead.linkedinUrl) {
-    enrichedData.linkedinUrl = person.linkedin_url;
-    enrichedFields.push("linkedinUrl");
-  }
-  
-  if (person.twitter_url && !lead.twitterUrl) {
-    enrichedData.twitterUrl = person.twitter_url;
-    enrichedFields.push("twitterUrl");
-  }
-  
-  if (person.facebook_url && !lead.facebookUrl) {
-    enrichedData.facebookUrl = person.facebook_url;
-    enrichedFields.push("facebookUrl");
-  }
-
-  // Location
-  if (person.city && !lead.city) {
-    enrichedData.city = person.city;
-    enrichedFields.push("city");
-  }
-  
-  if (person.state && !lead.state) {
-    enrichedData.state = person.state;
-    enrichedFields.push("state");
-  }
-  
-  if (person.country && !lead.country) {
-    enrichedData.country = person.country;
-    enrichedFields.push("country");
-  }
-
-  // Phone number
-  if (person.phone_numbers && person.phone_numbers.length > 0 && !lead.phone) {
-    const primaryPhone = person.phone_numbers.find(p => p.type === 'work') || person.phone_numbers[0];
-    enrichedData.phone = primaryPhone.number;
-    enrichedFields.push("phone");
-  }
-
-  // Company information
-  const org = person.organization || apolloData.organization;
-  
-  if (org) {
-    if (org.name && !lead.company) {
-      enrichedData.company = org.name;
-      enrichedFields.push("company");
-    }
-    
-    if (org.website_url && !lead.companyWebsite) {
-      enrichedData.companyWebsite = org.website_url;
-      enrichedFields.push("companyWebsite");
-    }
-    
-    if (org.domain && !lead.companyDomain) {
-      enrichedData.companyDomain = org.domain;
-      enrichedFields.push("companyDomain");
-    }
-    
-    if (org.linkedin_url && !lead.companyLinkedin) {
-      enrichedData.companyLinkedin = org.linkedin_url;
-      enrichedFields.push("companyLinkedin");
-    }
-    
-    if (org.industry && !lead.companyIndustry) {
-      enrichedData.companyIndustry = org.industry;
-      enrichedFields.push("companyIndustry");
-    }
-    
-    if (org.num_employees_enum && !lead.companySize) {
-      enrichedData.companySize = org.num_employees_enum;
-      enrichedFields.push("companySize");
-    }
-    
-    if (org.founded_year && !lead.companyFoundedYear) {
-      enrichedData.companyFoundedYear = org.founded_year;
-      enrichedFields.push("companyFoundedYear");
-    }
-    
-    if (org.primary_phone?.number && !lead.companyPhone) {
-      enrichedData.companyPhone = org.primary_phone.number;
-      enrichedFields.push("companyPhone");
-    }
-  }
+  const apolloData: ApolloSearchResponse = await response.json();
 
   return {
-    enrichedFields,
-    data: enrichedData,
-    apolloResponse: apolloData,
+    contacts: apolloData.people || [],
+    pagination: {
+      page: apolloData.pagination.page,
+      perPage: apolloData.pagination.per_page,
+      totalEntries: apolloData.pagination.total_entries,
+      totalPages: apolloData.pagination.total_pages,
+    },
   };
 }
 
 /**
- * Bulk enrich multiple leads (up to 10 at a time)
+ * Map Apollo contact to Lead schema
  */
-export async function bulkEnrichLeadsWithApollo(leads: Lead[]): Promise<Map<string, EnrichmentResult>> {
-  if (leads.length > 10) {
-    throw new Error("Apollo bulk enrichment supports maximum 10 leads at once");
-  }
+export function mapApolloContactToLead(apolloContact: ApolloPerson): Partial<Lead> {
+  const leadData: Partial<Lead> = {};
 
-  const apiKey = process.env.APOLLO_API_KEY;
+  // Personal information
+  if (apolloContact.first_name) {
+    leadData.firstName = apolloContact.first_name;
+  }
   
-  if (!apiKey) {
-    throw new Error("Apollo API key not configured");
+  if (apolloContact.last_name) {
+    leadData.lastName = apolloContact.last_name;
+  }
+  
+  if (apolloContact.name) {
+    leadData.name = apolloContact.name;
+  } else if (apolloContact.first_name && apolloContact.last_name) {
+    leadData.name = `${apolloContact.first_name} ${apolloContact.last_name}`;
+  }
+  
+  if (apolloContact.email) {
+    leadData.email = apolloContact.email;
   }
 
-  // Build match requests
-  const matchRequests = leads.map(lead => {
-    const params: any = {};
+  // Work information
+  if (apolloContact.title) {
+    leadData.position = apolloContact.title;
+  }
+
+  // Social profiles  
+  if (apolloContact.linkedin_url) {
+    leadData.linkedinUrl = apolloContact.linkedin_url;
+  }
+  
+  if (apolloContact.twitter_url) {
+    leadData.twitterUrl = apolloContact.twitter_url;
+  }
+  
+  if (apolloContact.facebook_url) {
+    leadData.facebookUrl = apolloContact.facebook_url;
+  }
+
+  // Location
+  if (apolloContact.city) {
+    leadData.city = apolloContact.city;
+  }
+  
+  if (apolloContact.state) {
+    leadData.state = apolloContact.state;
+  }
+  
+  if (apolloContact.country) {
+    leadData.country = apolloContact.country;
+  }
+
+  // Phone number
+  if (apolloContact.phone_numbers && apolloContact.phone_numbers.length > 0) {
+    const primaryPhone = apolloContact.phone_numbers.find(p => p.type === 'work') || apolloContact.phone_numbers[0];
+    leadData.phone = primaryPhone.number;
+  }
+
+  // Company information
+  const org = apolloContact.organization;
+  
+  if (org) {
+    if (org.name) {
+      leadData.company = org.name;
+    }
     
-    if (lead.email) params.email = lead.email;
-    if (lead.firstName) params.first_name = lead.firstName;
-    if (lead.lastName) params.last_name = lead.lastName;
-    if (lead.company) params.organization_name = lead.company;
-    if (lead.companyDomain) params.domain = lead.companyDomain;
-    if (lead.linkedinUrl) params.linkedin_url = lead.linkedinUrl;
+    if (org.website_url) {
+      leadData.companyWebsite = org.website_url;
+    }
     
-    return params;
-  });
-
-  const response = await fetch("https://api.apollo.io/v1/people/bulk_match", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      details: matchRequests,
-      reveal_personal_emails: true,
-      reveal_phone_number: true,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Apollo bulk API error: ${response.status} - ${errorText}`);
+    if (org.domain) {
+      leadData.companyDomain = org.domain;
+    }
+    
+    if (org.linkedin_url) {
+      leadData.companyLinkedin = org.linkedin_url;
+    }
+    
+    if (org.industry) {
+      leadData.companyIndustry = org.industry;
+    }
+    
+    if (org.num_employees_enum) {
+      leadData.companySize = org.num_employees_enum;
+    }
+    
+    if (org.founded_year) {
+      leadData.companyFoundedYear = org.founded_year;
+    }
+    
+    if (org.primary_phone?.number) {
+      leadData.companyPhone = org.primary_phone.number;
+    }
   }
 
-  const result = await response.json();
-  const results = new Map<string, EnrichmentResult>();
+  // Default status and score
+  leadData.status = "new";
+  leadData.score = 0;
 
-  // Process each match
-  if (result.matches && Array.isArray(result.matches)) {
-    result.matches.forEach((match: any, index: number) => {
-      if (match && leads[index]) {
-        const lead = leads[index];
-        const enrichedData: Partial<Lead> = {};
-        const enrichedFields: string[] = [];
-
-        // Extract data similar to single enrichment
-        if (match.first_name && !lead.firstName) {
-          enrichedData.firstName = match.first_name;
-          enrichedFields.push("firstName");
-        }
-        
-        if (match.email && !lead.email) {
-          enrichedData.email = match.email;
-          enrichedFields.push("email");
-        }
-
-        // ... (add more field mappings as needed)
-
-        results.set(lead.id, {
-          enrichedFields,
-          data: enrichedData,
-          apolloResponse: match,
-        });
-      }
-    });
-  }
-
-  return results;
+  return leadData;
 }
