@@ -23,17 +23,7 @@ interface SaleshandyProspect {
   [key: string]: any;
 }
 
-interface SaleshandyProspectsResponse {
-  data: {
-    prospects: SaleshandyProspect[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-  };
-}
+interface SaleshandyProspectsResponse extends Array<SaleshandyProspect> {}
 
 export interface SaleshandyImportResult {
   prospects: SaleshandyProspect[];
@@ -84,79 +74,85 @@ export async function fetchSaleshandyProspects(
 
   const data: SaleshandyProspectsResponse = await response.json();
   
-  console.log("Saleshandy API Response:", JSON.stringify(data, null, 2));
+  console.log("Saleshandy API Response - Total prospects:", data.length);
 
+  // API returns array directly, no wrapper
   return {
-    prospects: data.data.prospects || [],
-    pagination: data.data.pagination,
+    prospects: data,
+    pagination: {
+      total: data.length,
+      page: 1,
+      limit: data.length,
+      totalPages: 1,
+    },
   };
 }
 
 /**
  * Map Saleshandy prospect to Lead schema
+ * Saleshandy uses an attributes array with key-value pairs
  */
 export function mapSaleshandyProspectToLead(prospect: SaleshandyProspect): Partial<Lead> {
   const leadData: Partial<Lead> = {};
 
+  // Helper function to get attribute value by key
+  const getAttr = (key: string): string | undefined => {
+    const attr = prospect.attributes?.find((a: any) => a.key === key);
+    return attr?.value || undefined;
+  };
+
   // Email (required)
-  if (prospect.email) {
-    leadData.email = prospect.email;
-  }
+  leadData.email = prospect.email || getAttr("Email");
 
   // Personal information
-  if (prospect.firstName) {
-    leadData.firstName = prospect.firstName;
-  }
+  const firstName = getAttr("First Name");
+  const lastName = getAttr("Last Name");
   
-  if (prospect.lastName) {
-    leadData.lastName = prospect.lastName;
-  }
+  if (firstName) leadData.firstName = firstName;
+  if (lastName) leadData.lastName = lastName;
   
-  if (prospect.fullName) {
-    leadData.name = prospect.fullName;
-  } else if (prospect.firstName && prospect.lastName) {
-    leadData.name = `${prospect.firstName} ${prospect.lastName}`;
+  if (firstName && lastName) {
+    leadData.name = `${firstName} ${lastName}`;
+  } else if (firstName) {
+    leadData.name = firstName;
   }
 
   // Work information
-  if (prospect.title) {
-    leadData.position = prospect.title;
-  }
+  const jobTitle = getAttr("Job Title");
+  const company = getAttr("Company");
   
-  if (prospect.company) {
-    leadData.company = prospect.company;
-  }
+  if (jobTitle) leadData.position = jobTitle;
+  if (company) leadData.company = company;
 
   // Contact information
-  if (prospect.phone) {
-    leadData.phone = prospect.phone;
-  }
+  const phone = getAttr("Phone Number");
+  if (phone) leadData.phone = phone;
 
   // Location
-  if (prospect.city) {
-    leadData.city = prospect.city;
-  }
+  const city = getAttr("City");
+  const state = getAttr("State");
+  const country = getAttr("Country");
   
-  if (prospect.state) {
-    leadData.state = prospect.state;
-  }
-  
-  if (prospect.country) {
-    leadData.country = prospect.country;
-  }
+  if (city) leadData.city = city;
+  if (state) leadData.state = state;
+  if (country) leadData.country = country;
 
   // Social & Web
-  if (prospect.linkedinUrl) {
-    leadData.linkedinUrl = prospect.linkedinUrl;
-  }
+  const linkedin = getAttr("LinkedIn");
+  const twitter = getAttr("Twitter");
+  const facebook = getAttr("Facebook");
+  const website = getAttr("Website");
+  const companyWebsite = getAttr("Company Website");
   
-  if (prospect.website) {
-    leadData.website = prospect.website;
-  }
-  
-  if (prospect.companyWebsite) {
-    leadData.companyWebsite = prospect.companyWebsite;
-  }
+  if (linkedin) leadData.linkedinUrl = linkedin;
+  if (twitter) leadData.twitterUrl = twitter;
+  if (facebook) leadData.facebookUrl = facebook;
+  if (website) leadData.website = website;
+  if (companyWebsite) leadData.companyWebsite = companyWebsite;
+
+  // Company information
+  const companyDomain = getAttr("Company Domain");
+  if (companyDomain) leadData.companyDomain = companyDomain;
 
   // Default status and score
   leadData.status = "new";
