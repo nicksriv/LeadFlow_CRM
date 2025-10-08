@@ -16,6 +16,8 @@ import {
   pipelineStages,
   deals,
   dealStageHistory,
+  apolloEnrichments,
+  saleshandySequences,
   type Lead,
   type InsertLead,
   type Conversation,
@@ -50,6 +52,10 @@ import {
   type InsertDeal,
   type DealStageHistory,
   type InsertDealStageHistory,
+  type ApolloEnrichment,
+  type InsertApolloEnrichment,
+  type SaleshandySequence,
+  type InsertSaleshandySequence,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, or, sql } from "drizzle-orm";
@@ -164,6 +170,15 @@ export interface IStorage {
   // Automation Logs
   getAutomationLogs(ruleId?: string): Promise<AutomationLog[]>;
   logAutomationExecution(log: InsertAutomationLog): Promise<AutomationLog>;
+
+  // Apollo Enrichments
+  createApolloEnrichment(enrichment: InsertApolloEnrichment): Promise<ApolloEnrichment>;
+  getApolloEnrichments(leadId: string): Promise<ApolloEnrichment[]>;
+
+  // Saleshandy Sequences
+  createSaleshandySequence(sequence: InsertSaleshandySequence): Promise<SaleshandySequence>;
+  getSaleshandySequences(leadId: string): Promise<SaleshandySequence[]>;
+  updateSaleshandySequence(id: string, sequence: Partial<InsertSaleshandySequence>): Promise<SaleshandySequence | undefined>;
 
   // Helper methods
   getConversation(id: string): Promise<Conversation | undefined>;
@@ -665,6 +680,43 @@ export class DatabaseStorage implements IStorage {
       .from(pipelineStages)
       .where(eq(pipelineStages.pipelineId, pipelineId))
       .orderBy(pipelineStages.order);
+  }
+
+  // Apollo Enrichments
+  async createApolloEnrichment(insertEnrichment: InsertApolloEnrichment): Promise<ApolloEnrichment> {
+    const [enrichment] = await db.insert(apolloEnrichments).values(insertEnrichment).returning();
+    return enrichment;
+  }
+
+  async getApolloEnrichments(leadId: string): Promise<ApolloEnrichment[]> {
+    return db
+      .select()
+      .from(apolloEnrichments)
+      .where(eq(apolloEnrichments.leadId, leadId))
+      .orderBy(desc(apolloEnrichments.enrichedAt));
+  }
+
+  // Saleshandy Sequences
+  async createSaleshandySequence(insertSequence: InsertSaleshandySequence): Promise<SaleshandySequence> {
+    const [sequence] = await db.insert(saleshandySequences).values(insertSequence).returning();
+    return sequence;
+  }
+
+  async getSaleshandySequences(leadId: string): Promise<SaleshandySequence[]> {
+    return db
+      .select()
+      .from(saleshandySequences)
+      .where(eq(saleshandySequences.leadId, leadId))
+      .orderBy(desc(saleshandySequences.addedAt));
+  }
+
+  async updateSaleshandySequence(id: string, updates: Partial<InsertSaleshandySequence>): Promise<SaleshandySequence | undefined> {
+    const [sequence] = await db
+      .update(saleshandySequences)
+      .set(updates)
+      .where(eq(saleshandySequences.id, id))
+      .returning();
+    return sequence || undefined;
   }
 }
 
