@@ -72,17 +72,30 @@ export async function fetchSaleshandyProspects(
     throw new Error(`Saleshandy API error: ${response.status} - ${errorText}`);
   }
 
-  const data: SaleshandyProspectsResponse = await response.json();
+  const rawData = await response.json();
   
-  console.log("Saleshandy API Response - Total prospects:", data.length);
+  console.log("Saleshandy API Raw Response Type:", typeof rawData);
+  console.log("Saleshandy API Raw Response:", JSON.stringify(rawData).substring(0, 500));
 
-  // API returns array directly, no wrapper
+  // Check if it's an array or object with data property
+  let prospects: SaleshandyProspect[] = [];
+  
+  if (Array.isArray(rawData)) {
+    prospects = rawData;
+  } else if (rawData.data && Array.isArray(rawData.data)) {
+    prospects = rawData.data;
+  } else if (rawData.prospects && Array.isArray(rawData.prospects)) {
+    prospects = rawData.prospects;
+  }
+
+  console.log("Parsed prospects count:", prospects.length);
+
   return {
-    prospects: data,
+    prospects: prospects,
     pagination: {
-      total: data.length,
+      total: prospects.length,
       page: 1,
-      limit: data.length,
+      limit: prospects.length,
       totalPages: 1,
     },
   };
