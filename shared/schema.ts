@@ -25,14 +25,44 @@ export type LineOfBusiness = typeof lineOfBusinessOptions[number];
 // Leads table
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
+  
+  // Contact Information
+  name: text("name").notNull(), // Full name (kept for backward compatibility)
+  firstName: text("first_name"),
+  lastName: text("last_name"),
   email: text("email").notNull(),
-  company: text("company"),
   phone: text("phone"),
-  position: text("position"),
+  
+  // Work Information
+  position: text("position"), // Job Title
+  department: text("department"),
+  industry: text("industry"),
+  experience: text("experience"), // Years of experience or description
+  
+  // Social Profiles
   linkedinUrl: text("linkedin_url"),
-  lineOfBusiness: text("line_of_business"),
+  twitterUrl: text("twitter_url"),
+  facebookUrl: text("facebook_url"),
   website: text("website"),
+  
+  // Location Information
+  city: text("city"),
+  state: text("state"),
+  country: text("country"),
+  
+  // Company Information
+  company: text("company"),
+  companyDomain: text("company_domain"),
+  companyWebsite: text("company_website"),
+  companyIndustry: text("company_industry"),
+  companySize: text("company_size"),
+  companyRevenue: text("company_revenue"),
+  companyFoundedYear: integer("company_founded_year"),
+  companyLinkedin: text("company_linkedin"),
+  companyPhone: text("company_phone"),
+  
+  // Legacy/System Fields
+  lineOfBusiness: text("line_of_business"), // Deprecated, use industry
   status: text("status").notNull().default("cold"), // cold, warm, hot
   score: integer("score").notNull().default(0), // 0-100
   ownerId: varchar("owner_id").references(() => users.id), // Lead owner/assigned sales rep
@@ -377,9 +407,21 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 }).extend({
   score: z.number().min(0).max(100).optional(),
   status: z.enum(leadStatuses).optional(),
+  
+  // URL validations for social profiles and websites
   linkedinUrl: z.string().url().optional().or(z.literal("")),
+  twitterUrl: z.string().url().optional().or(z.literal("")),
+  facebookUrl: z.string().url().optional().or(z.literal("")),
   website: z.string().url().optional().or(z.literal("")),
+  companyWebsite: z.string().url().optional().or(z.literal("")),
+  companyLinkedin: z.string().url().optional().or(z.literal("")),
+  
+  // Number validations
+  companyFoundedYear: z.number().min(1800).max(new Date().getFullYear()).optional().nullable(),
+  
+  // Optional legacy field
   lineOfBusiness: z.enum(lineOfBusinessOptions).optional(),
+  
   customFields: z.record(z.string(), z.any()).optional(),
 });
 

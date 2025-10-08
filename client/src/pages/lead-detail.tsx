@@ -235,59 +235,209 @@ export default function LeadDetail() {
                   </div>
                 )}
 
-                {lead.company && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span>{lead.company}</span>
-                  </div>
-                )}
-
-                {lead.position && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span>{lead.position}</span>
-                  </div>
-                )}
-
-                {lead.linkedinUrl && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Linkedin className="h-4 w-4 text-muted-foreground" />
-                    <a
-                      href={lead.linkedinUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                      data-testid="link-linkedin"
-                    >
-                      LinkedIn Profile
-                    </a>
-                  </div>
-                )}
-
-                {lead.website && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                    <a
-                      href={lead.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                      data-testid="link-website"
-                    >
-                      Website
-                    </a>
-                  </div>
-                )}
-
-                {lead.lineOfBusiness && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Tag className="h-4 w-4 text-muted-foreground" />
-                    <span data-testid="text-line-of-business">{lead.lineOfBusiness}</span>
+                {(lead.city || lead.state || lead.country) && (
+                  <div className="flex items-start gap-3 text-sm">
+                    <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <span>
+                      {[lead.city, lead.state, lead.country].filter(Boolean).join(", ")}
+                    </span>
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
+
+          {(lead.position || lead.department || lead.industry || lead.experience) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Work Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {lead.position && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Job Title:</span>
+                      <span data-testid="text-lead-position">{lead.position}</span>
+                    </div>
+                  )}
+                  {lead.department && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Department:</span>
+                      <span data-testid="text-lead-department">{lead.department}</span>
+                    </div>
+                  )}
+                  {lead.industry && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Industry:</span>
+                      <span data-testid="text-lead-industry">{lead.industry}</span>
+                    </div>
+                  )}
+                  {lead.experience && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Experience:</span>
+                      <span data-testid="text-lead-experience">{lead.experience}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(lead.linkedinUrl || lead.twitterUrl || lead.facebookUrl || lead.website) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Social Profiles</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {lead.linkedinUrl && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Linkedin className="h-4 w-4 text-muted-foreground" />
+                      <a
+                        href={lead.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        data-testid="link-linkedin"
+                      >
+                        LinkedIn Profile
+                      </a>
+                    </div>
+                  )}
+                  {lead.twitterUrl && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <svg className="h-4 w-4 text-muted-foreground" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      <a
+                        href={lead.twitterUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        data-testid="link-twitter"
+                      >
+                        Twitter Profile
+                      </a>
+                    </div>
+                  )}
+                  {lead.facebookUrl && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <svg className="h-4 w-4 text-muted-foreground" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                      </svg>
+                      <a
+                        href={lead.facebookUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        data-testid="link-facebook"
+                      >
+                        Facebook Profile
+                      </a>
+                    </div>
+                  )}
+                  {lead.website && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <a
+                        href={lead.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        data-testid="link-website"
+                      >
+                        Personal Website
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(lead.company || lead.companyWebsite || lead.companyIndustry || lead.companySize || lead.companyRevenue || lead.companyPhone || lead.companyLinkedin) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Company Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {lead.company && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Company Name:</span>
+                      <span data-testid="text-lead-company">{lead.company}</span>
+                    </div>
+                  )}
+                  {lead.companyWebsite && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Website:</span>
+                      <a
+                        href={lead.companyWebsite}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        data-testid="link-company-website"
+                      >
+                        {lead.companyWebsite}
+                      </a>
+                    </div>
+                  )}
+                  {lead.companyDomain && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Domain:</span>
+                      <span data-testid="text-company-domain">{lead.companyDomain}</span>
+                    </div>
+                  )}
+                  {lead.companyIndustry && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Industry:</span>
+                      <span data-testid="text-company-industry">{lead.companyIndustry}</span>
+                    </div>
+                  )}
+                  {lead.companySize && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Size:</span>
+                      <span data-testid="text-company-size">{lead.companySize}</span>
+                    </div>
+                  )}
+                  {lead.companyRevenue && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Revenue:</span>
+                      <span data-testid="text-company-revenue">{lead.companyRevenue}</span>
+                    </div>
+                  )}
+                  {lead.companyFoundedYear && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Founded:</span>
+                      <span data-testid="text-company-founded">{lead.companyFoundedYear}</span>
+                    </div>
+                  )}
+                  {lead.companyPhone && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">Phone:</span>
+                      <a href={`tel:${lead.companyPhone}`} className="text-primary hover:underline" data-testid="link-company-phone">
+                        {lead.companyPhone}
+                      </a>
+                    </div>
+                  )}
+                  {lead.companyLinkedin && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-muted-foreground">LinkedIn:</span>
+                      <a
+                        href={lead.companyLinkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        data-testid="link-company-linkedin"
+                      >
+                        Company Profile
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {(() => {
             const customFields = lead.customFields as Record<string, any> | null | undefined;
