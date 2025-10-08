@@ -91,6 +91,21 @@ export async function fetchSaleshandyProspects(
 
   console.log("Total prospects from Saleshandy API:", allProspects.length);
 
+  // Debug: Log sample of tags to understand the data structure
+  if (allProspects.length > 0) {
+    const sampleProspect = allProspects[0];
+    console.log("Sample prospect tags:", sampleProspect.tags);
+    
+    // Show unique tags across all prospects
+    const allTags = new Set<string>();
+    allProspects.forEach(prospect => {
+      if (prospect.tags && Array.isArray(prospect.tags)) {
+        prospect.tags.forEach((tag: string) => allTags.add(tag));
+      }
+    });
+    console.log("All unique tags found:", Array.from(allTags));
+  }
+
   // Filter prospects to only show those with "verified" tag
   const verifiedProspects = allProspects.filter(prospect => 
     prospect.tags && Array.isArray(prospect.tags) && prospect.tags.includes("verified")
