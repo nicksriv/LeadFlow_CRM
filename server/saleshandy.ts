@@ -91,19 +91,27 @@ export async function fetchSaleshandyProspects(
 
   console.log("Total prospects from Saleshandy API:", allProspects.length);
 
+  // Filter prospects to only show those with "verified" tag
+  const verifiedProspects = allProspects.filter(prospect => 
+    prospect.tags && Array.isArray(prospect.tags) && prospect.tags.includes("verified")
+  );
+
+  console.log(`Filtered to ${verifiedProspects.length} verified prospects`);
+
   // Implement client-side pagination since API returns all prospects
   const startIndex = (page - 1) * limit;
   const endIndex = startIndex + limit;
-  const paginatedProspects = allProspects.slice(startIndex, endIndex);
+  const paginatedProspects = verifiedProspects.slice(startIndex, endIndex);
   
-  const totalPages = Math.ceil(allProspects.length / limit);
+  // Ensure totalPages is at least 1 to prevent client issues with zero pages
+  const totalPages = Math.max(1, Math.ceil(verifiedProspects.length / limit));
 
   console.log(`Returning page ${page} of ${totalPages} (${paginatedProspects.length} prospects)`);
 
   return {
     prospects: paginatedProspects,
     pagination: {
-      total: allProspects.length,
+      total: verifiedProspects.length,
       page: page,
       limit: limit,
       totalPages: totalPages,
