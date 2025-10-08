@@ -44,12 +44,13 @@ The application is built with a modern tech stack:
 - **Backend Implementation**: `server/saleshandy.ts` implements pull-based import from Saleshandy prospects
 - **Fetch Endpoint**: GET `/api/integrations/saleshandy/prospects` - fetches prospects from Saleshandy with pagination
 - **Import Endpoint**: POST `/api/integrations/saleshandy/import` - imports selected prospects
-- **Pagination**: Supports pagination with configurable page size (default 50 prospects per page)
+- **Verified Tag Filtering**: Only prospects with "verified" tag are displayed for import. Filters by checking if tags array includes "verified" string
+- **Pagination**: Supports pagination with configurable page size (default 50 prospects per page). Total pages guaranteed to be at least 1 even with zero results
 - **Data Mapping**: Maps Saleshandy prospect fields to Lead schema (email, name, position, company, phone, location, social profiles)
 - **Duplicate Detection**: Checks for existing leads by email before importing to prevent duplicates
 - **Tracking**: All imports are logged in the `campaignProspects` table with import data and status
 - **UI Integration**: Leads page includes "Import Leads" button with Saleshandy tab for viewing and importing prospects
-- **Error Handling**: Validates email presence, handles API errors, and provides clear error messages to users
+- **Error Handling**: Validates email presence, handles API errors, provides clear error messages, and gracefully displays empty state when no verified prospects found
 
 ### Import UI Features
 - **Dual-Tab Dialog**: Import dialog with tabs for Apollo.io and Saleshandy imports
