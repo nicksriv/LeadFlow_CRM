@@ -74,23 +74,30 @@ export async function fetchSaleshandyProspects(
 
   const rawData = await response.json();
   
-  console.log("Saleshandy API Raw Response Type:", typeof rawData);
-  console.log("Saleshandy API Raw Response:", JSON.stringify(rawData).substring(0, 500));
-
   // Check if it's an array or object with data property
-  let prospects: SaleshandyProspect[] = [];
+  let allProspects: SaleshandyProspect[] = [];
   
   if (Array.isArray(rawData)) {
-    prospects = rawData;
+    allProspects = rawData;
   } else if (rawData.payload && Array.isArray(rawData.payload)) {
-    prospects = rawData.payload;
+    allProspects = rawData.payload;
   } else if (rawData.data && Array.isArray(rawData.data)) {
-    prospects = rawData.data;
+    allProspects = rawData.data;
   } else if (rawData.prospects && Array.isArray(rawData.prospects)) {
-    prospects = rawData.prospects;
+    allProspects = rawData.prospects;
   }
 
-  console.log("Parsed prospects count:", prospects.length);
+  console.log("Total prospects from API:", allProspects.length);
+  
+  // Filter prospects to only show those with "Latest Status" = "replied"
+  const prospects = allProspects.filter((prospect) => {
+    const latestStatusAttr = prospect.attributes?.find(
+      (attr: { key: string; value: string }) => attr.key === "Latest Status"
+    );
+    return latestStatusAttr?.value?.toLowerCase() === "replied";
+  });
+
+  console.log("Filtered prospects (Latest Status = replied):", prospects.length);
 
   return {
     prospects: prospects,

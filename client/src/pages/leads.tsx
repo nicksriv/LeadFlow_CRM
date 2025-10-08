@@ -568,7 +568,7 @@ function SaleshandyImportTab({ onClose }: { onClose: () => void }) {
     if (selectedProspects.size === prospects.length) {
       setSelectedProspects(new Set());
     } else {
-      setSelectedProspects(new Set(prospects.map(p => p._id)));
+      setSelectedProspects(new Set(prospects.map(p => String(p.id))));
     }
   };
 
@@ -604,12 +604,12 @@ function SaleshandyImportTab({ onClose }: { onClose: () => void }) {
 
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {prospects.map((prospect) => (
-              <Card key={prospect._id} className="p-4">
+              <Card key={String(prospect.id)} className="p-4">
                 <div className="flex items-start gap-3">
                   <Checkbox
-                    checked={selectedProspects.has(prospect._id)}
-                    onCheckedChange={() => toggleProspect(prospect._id)}
-                    data-testid={`checkbox-prospect-${prospect._id}`}
+                    checked={selectedProspects.has(String(prospect.id))}
+                    onCheckedChange={() => toggleProspect(String(prospect.id))}
+                    data-testid={`checkbox-prospect-${prospect.id}`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">

@@ -195,7 +195,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 100;
 
       const result = await fetchSaleshandyProspects(page, limit);
-      res.json(result);
+      
+      // Map prospects for frontend display (extract attributes)
+      const mappedProspects = result.prospects.map((prospect: any) => {
+        const getAttr = (key: string) => {
+          const attr = prospect.attributes?.find((a: any) => a.key === key);
+          return attr?.value || '';
+        };
+
+        return {
+          id: prospect.id,
+          email: prospect.email || getAttr("Email"),
+          firstName: getAttr("First Name"),
+          lastName: getAttr("Last Name"),
+          fullName: `${getAttr("First Name")} ${getAttr("Last Name")}`.trim(),
+          company: getAttr("Company"),
+          title: getAttr("Job Title"),
+          phone: getAttr("Phone Number"),
+          status: getAttr("Latest Status"),
+          verificationStatus: prospect.verificationStatus,
+        };
+      });
+
+      res.json({
+        prospects: mappedProspects,
+        pagination: result.pagination,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
