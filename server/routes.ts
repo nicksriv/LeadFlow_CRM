@@ -282,9 +282,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Track import in campaignProspects table (repurposing for import tracking)
           await storage.createSaleshandySequence({
             leadId: newLead.id,
-            sequenceId: prospect._id,
+            sequenceId: String(prospect.id),
             sequenceName: "Imported from Saleshandy",
-            stepId: prospect._id,
+            stepId: String(prospect.id),
             status: prospect.status || "active",
             lastActivityAt: prospect.updatedAt ? new Date(prospect.updatedAt) : null,
             emailsSent: 0,
@@ -298,7 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             leadId: newLead.id,
             type: "lead_created",
             description: `Lead imported from Saleshandy`,
-            metadata: { source: "saleshandy", saleshandyProspectId: prospect._id },
+            metadata: { source: "saleshandy", saleshandyProspectId: String(prospect.id) },
           });
 
           importResults.imported.push(newLead);
