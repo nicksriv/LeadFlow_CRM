@@ -26,7 +26,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Sparkles, Loader2 } from "lucide-react";
 
 interface LeadFormDialogProps {
   open: boolean;
@@ -156,6 +156,63 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
       });
     },
   });
+
+  const enrichmentMutation = useMutation({
+    mutationFn: async (linkedinUrl: string) => {
+      const response = await fetch("/api/integrations/linkedin/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkedinUrl }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to enrich LinkedIn profile");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        // Auto-fill form fields with enriched data
+        const enrichedData = data.data;
+        if (enrichedData.firstName) form.setValue("firstName", enrichedData.firstName);
+        if (enrichedData.lastName) form.setValue("lastName", enrichedData.lastName);
+        if (enrichedData.email) form.setValue("email", enrichedData.email);
+        if (enrichedData.phone) form.setValue("phone", enrichedData.phone);
+        if (enrichedData.position) form.setValue("position", enrichedData.position);
+        if (enrichedData.industry) form.setValue("industry", enrichedData.industry);
+        if (enrichedData.company) form.setValue("company", enrichedData.company);
+        if (enrichedData.city) form.setValue("city", enrichedData.city);
+        if (enrichedData.state) form.setValue("state", enrichedData.state);
+        if (enrichedData.notes) form.setValue("notes", enrichedData.notes);
+        if (enrichedData.companyIndustry) form.setValue("companyIndustry", enrichedData.companyIndustry);
+        
+        toast({
+          title: "Profile Enriched",
+          description: "LinkedIn profile data has been auto-filled successfully!",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Enrichment Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEnrichLinkedIn = () => {
+    const linkedinUrl = form.getValues("linkedinUrl");
+    if (!linkedinUrl) {
+      toast({
+        title: "LinkedIn URL Required",
+        description: "Please enter a LinkedIn URL first",
+        variant: "destructive",
+      });
+      return;
+    }
+    enrichmentMutation.mutate(linkedinUrl);
+  };
 
   const onSubmit = (data: InsertLead) => {
     mutation.mutate(data);
@@ -353,13 +410,13 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
               <AccordionItem value="social">
                 <AccordionTrigger className="text-base font-semibold">Social Profiles</AccordionTrigger>
                 <AccordionContent className="space-y-4 pt-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="linkedinUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>LinkedIn</FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="linkedinUrl"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>LinkedIn URL</FormLabel>
+                        <div className="flex gap-2">
                           <FormControl>
                             <Input
                               type="url"
@@ -367,6 +424,44 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
                               {...field}
                               value={field.value || ""}
                               data-testid="input-lead-linkedin"
+                            />
+                          </FormControl>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleEnrichLinkedIn}
+                            disabled={enrichmentMutation.isPending}
+                            data-testid="button-enrich-linkedin"
+                          >
+                            {enrichmentMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            <span className="ml-2">Auto-fill</span>
+                          </Button>
+                        </div>
+                        <FormDescription>
+                          Enter a LinkedIn profile URL and click Auto-fill to automatically populate lead details
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="twitterUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Twitter/X</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="url"
+                              placeholder="https://twitter.com/johndoe"
+                              {...field}
+                              value={field.value || ""}
+                              data-testid="input-lead-twitter"
                             />
                           </FormControl>
                           <FormMessage />
