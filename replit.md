@@ -22,4 +22,35 @@ The application is built with a modern tech stack:
 ## External Dependencies
 - **OpenAI GPT-5**: Used for all AI-powered features, including lead scoring, conversation analysis, summarization, email drafting, and predictive analytics.
 - **Microsoft Graph API**: Utilized for Microsoft 365 mailbox integration, including OAuth 2.0 authentication, email synchronization (fetching and sending), and real-time webhook notifications.
+- **Apollo.io API**: Integrated for lead enrichment with contact data, company information, and social profiles. Requires paid API plan for full access to the `/v1/people/match` endpoint. Enrichment data is tracked in the `enrichmentHistory` table.
+- **Saleshandy API**: Integrated for adding leads to email sequences for cold email campaigns. Leads can be added to sequences via the `/v1/prospects` endpoint with sequence step IDs. Campaign prospect data is tracked in the `campaignProspects` table.
 - **PostgreSQL**: The primary relational database for all application data storage.
+
+## Recent Updates (October 8, 2025)
+
+### Apollo.io Integration
+- **Backend Implementation**: `server/apollo.ts` handles lead enrichment via Apollo.io's Person Enrichment API
+- **API Endpoint**: POST `/api/leads/:id/enrich-apollo` triggers enrichment for a specific lead
+- **Data Enrichment**: Automatically enriches firstName, lastName, position, LinkedIn/Twitter/Facebook URLs, location (city, state, country), phone, and company information
+- **Tracking**: All enrichment attempts are logged in the `enrichmentHistory` table with status, enriched fields, credits used, and error messages
+- **UI Integration**: Lead detail page includes "Enrich with Apollo" button with loading states and success/error toasts
+- **Error Handling**: Gracefully handles API errors, missing data, and API plan limitations
+
+### Saleshandy Integration
+- **Backend Implementation**: `server/saleshandy.ts` handles adding leads to email sequences
+- **API Endpoint**: POST `/api/leads/:id/add-to-sequence` with `sequenceStepId` parameter
+- **Data Mapping**: Automatically maps lead fields (email, firstName, lastName, company, position, phone, location, social profiles) to Saleshandy prospect fields
+- **Tracking**: All sequence additions are logged in the `campaignProspects` table with sequence step ID, prospect ID, status, and timestamps
+- **UI Integration**: Lead detail page includes "Add to Sequence" button that opens a dialog for manual sequence step ID entry
+- **Error Handling**: Validates email presence, handles API errors, and provides clear error messages to users
+
+### Database Schema Extensions
+- **enrichmentHistory Table**: Tracks all Apollo enrichment attempts with JSONB enrichment data, array of enriched fields, credits used, status, and error messages
+- **campaignProspects Table**: Tracks Saleshandy sequence assignments with sequence step ID, Saleshandy prospect ID, status, and timestamps
+
+### Integration Notes
+- API keys are stored in Replit Secrets (APOLLO_API_KEY, SALESHANDY_API_KEY)
+- Apollo.io free plan has limitations on API endpoint access - paid plan required for full functionality
+- Saleshandy requires valid sequence step IDs which must be obtained from the Saleshandy dashboard
+- Both integrations include comprehensive error handling and user feedback via toasts
+- Database tracking tables enable audit trails and integration history
