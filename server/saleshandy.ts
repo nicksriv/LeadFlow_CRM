@@ -72,6 +72,12 @@ export async function fetchSaleshandyProspects(
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error("Saleshandy API Error Details:", {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody: errorText,
+      url: url.toString()
+    });
     throw new Error(`Saleshandy API error: ${response.status} - ${errorText}`);
   }
 
