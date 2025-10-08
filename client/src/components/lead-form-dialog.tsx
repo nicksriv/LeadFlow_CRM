@@ -157,61 +157,75 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
     },
   });
 
-  const enrichmentMutation = useMutation({
-    mutationFn: async (linkedinUrl: string) => {
-      const response = await fetch("/api/integrations/linkedin/enrich", {
+  const screenshotMutation = useMutation({
+    mutationFn: async (imageBase64: string) => {
+      const response = await fetch("/api/integrations/linkedin/screenshot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ linkedinUrl }),
+        body: JSON.stringify({ imageBase64 }),
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to enrich LinkedIn profile");
+        throw new Error(error.error || "Failed to extract data from screenshot");
       }
       return response.json();
     },
     onSuccess: (data) => {
       if (data.success && data.data) {
-        // Auto-fill form fields with enriched data
-        const enrichedData = data.data;
-        if (enrichedData.firstName) form.setValue("firstName", enrichedData.firstName);
-        if (enrichedData.lastName) form.setValue("lastName", enrichedData.lastName);
-        if (enrichedData.email) form.setValue("email", enrichedData.email);
-        if (enrichedData.phone) form.setValue("phone", enrichedData.phone);
-        if (enrichedData.position) form.setValue("position", enrichedData.position);
-        if (enrichedData.industry) form.setValue("industry", enrichedData.industry);
-        if (enrichedData.company) form.setValue("company", enrichedData.company);
-        if (enrichedData.city) form.setValue("city", enrichedData.city);
-        if (enrichedData.state) form.setValue("state", enrichedData.state);
-        if (enrichedData.notes) form.setValue("notes", enrichedData.notes);
-        if (enrichedData.companyIndustry) form.setValue("companyIndustry", enrichedData.companyIndustry);
+        // Auto-fill form fields with extracted data
+        const extractedData = data.data;
+        if (extractedData.firstName) form.setValue("firstName", extractedData.firstName);
+        if (extractedData.lastName) form.setValue("lastName", extractedData.lastName);
+        if (extractedData.email) form.setValue("email", extractedData.email);
+        if (extractedData.phone) form.setValue("phone", extractedData.phone);
+        if (extractedData.position) form.setValue("position", extractedData.position);
+        if (extractedData.industry) form.setValue("industry", extractedData.industry);
+        if (extractedData.company) form.setValue("company", extractedData.company);
+        if (extractedData.city) form.setValue("city", extractedData.city);
+        if (extractedData.state) form.setValue("state", extractedData.state);
+        if (extractedData.country) form.setValue("country", extractedData.country);
+        if (extractedData.notes) form.setValue("notes", extractedData.notes);
+        if (extractedData.companyIndustry) form.setValue("companyIndustry", extractedData.companyIndustry);
+        if (extractedData.linkedinUrl) form.setValue("linkedinUrl", extractedData.linkedinUrl);
         
         toast({
-          title: "Profile Enriched",
-          description: "LinkedIn profile data has been auto-filled successfully!",
+          title: "Data Extracted Successfully",
+          description: "LinkedIn screenshot data has been auto-filled!",
         });
       }
     },
     onError: (error: Error) => {
       toast({
-        title: "Enrichment Failed",
+        title: "Extraction Failed",
         description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const handleEnrichLinkedIn = () => {
-    const linkedinUrl = form.getValues("linkedinUrl");
-    if (!linkedinUrl) {
+  const handleScreenshotUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
       toast({
-        title: "LinkedIn URL Required",
-        description: "Please enter a LinkedIn URL first",
+        title: "Invalid File",
+        description: "Please upload an image file",
         variant: "destructive",
       });
       return;
     }
-    enrichmentMutation.mutate(linkedinUrl);
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      // Remove data URL prefix to get just the base64 string
+      const base64Data = base64.split(',')[1];
+      screenshotMutation.mutate(base64Data);
+    };
+    reader.readAsDataURL(file);
   };
 
   const onSubmit = (data: InsertLead) => {
@@ -410,40 +424,45 @@ export function LeadFormDialog({ open, onOpenChange, lead }: LeadFormDialogProps
               <AccordionItem value="social">
                 <AccordionTrigger className="text-base font-semibold">Social Profiles</AccordionTrigger>
                 <AccordionContent className="space-y-4 pt-4">
+                  {/* LinkedIn Screenshot Upload */}
+                  <div className="p-4 border border-dashed rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                      <h4 className="font-medium">Auto-fill from LinkedIn Screenshot</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Upload a screenshot of a LinkedIn profile to automatically extract and fill lead information
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleScreenshotUpload}
+                        disabled={screenshotMutation.isPending}
+                        className="cursor-pointer"
+                        data-testid="input-screenshot-upload"
+                      />
+                      {screenshotMutation.isPending && (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      )}
+                    </div>
+                  </div>
+
                   <FormField
                     control={form.control}
                     name="linkedinUrl"
                     render={({ field }) => (
-                      <FormItem className="md:col-span-2">
+                      <FormItem>
                         <FormLabel>LinkedIn URL</FormLabel>
-                        <div className="flex gap-2">
-                          <FormControl>
-                            <Input
-                              type="url"
-                              placeholder="https://linkedin.com/in/johndoe"
-                              {...field}
-                              value={field.value || ""}
-                              data-testid="input-lead-linkedin"
-                            />
-                          </FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleEnrichLinkedIn}
-                            disabled={enrichmentMutation.isPending}
-                            data-testid="button-enrich-linkedin"
-                          >
-                            {enrichmentMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Sparkles className="h-4 w-4" />
-                            )}
-                            <span className="ml-2">Auto-fill</span>
-                          </Button>
-                        </div>
-                        <FormDescription>
-                          Enter a LinkedIn profile URL and click Auto-fill to automatically populate lead details
-                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            type="url"
+                            placeholder="https://linkedin.com/in/johndoe"
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-lead-linkedin"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
