@@ -289,23 +289,29 @@ export default function LeadDetail() {
             </CardContent>
           </Card>
 
-          {lead.customFields && Object.keys(lead.customFields).length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Custom Fields</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {Object.entries(lead.customFields as Record<string, any>).map(([key, value]) => (
-                    <div key={key} className="flex justify-between text-sm">
-                      <span className="font-medium text-muted-foreground">{key}:</span>
-                      <span data-testid={`text-custom-field-${key}`}>{String(value)}</span>
+          {(() => {
+            const customFields = lead.customFields as Record<string, any> | null | undefined;
+            if (customFields && typeof customFields === 'object' && Object.keys(customFields).length > 0) {
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Custom Fields</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(customFields).map(([key, value]) => (
+                        <div key={key} className="flex justify-between text-sm">
+                          <span className="font-medium text-muted-foreground">{key}:</span>
+                          <span data-testid={`text-custom-field-${key}`}>{String(value)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  </CardContent>
+                </Card>
+              );
+            }
+            return null;
+          })()}
 
           <Card>
             <CardHeader>
