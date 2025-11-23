@@ -94,5 +94,5 @@ EOL
   docker compose -f docker-compose.prod.yml exec app npx tsx server/seed.ts
 
   echo -e "${GREEN}✅ Deployment Complete!${NC}"
-  echo "Your app should be live at http://$VPS_IP:8081"
+  echo "Your app should be live at http://$VPS_IP:6487"
 EOF

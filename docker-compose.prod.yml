@@ -33,7 +33,7 @@ services:
     container_name: leadflow_nginx
     restart: always
     ports:
-      - "8081:80"
+      - "6487:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
