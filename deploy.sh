@@ -44,6 +44,17 @@ ssh -t $VPS_USER@$VPS_IP << EOF
       echo "Docker is already installed."
   fi
 
+  echo -e "${GREEN}2.5. Configuring Firewall...${NC}"
+  if command -v ufw &> /dev/null; then
+      echo "Allowing port 6487..."
+      ufw allow 6487/tcp
+      ufw allow 22/tcp
+      ufw --force enable
+      ufw reload
+  else
+      echo "UFW not found. Skipping firewall configuration."
+  fi
+
   echo -e "${GREEN}3. Setting up Application...${NC}"
   mkdir -p /var/www
   if [ -d "$APP_DIR" ]; then
