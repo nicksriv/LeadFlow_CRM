@@ -20,7 +20,10 @@ WORKDIR /app
 
 # Install production dependencies
 COPY package*.json ./
+# Install production dependencies
+COPY package*.json ./
 RUN npm ci --only=production
+RUN apk add --no-cache curl
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
