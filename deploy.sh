@@ -60,13 +60,17 @@ ssh -t $VPS_USER@$VPS_IP << EOF
   if [ -d "$APP_DIR" ]; then
       echo "Updating existing repository..."
       cd $APP_DIR
-      git pull
+      git fetch --all
+      git reset --hard origin/main
   else
       echo "Cloning repository..."
       cd /var/www
       git clone $REPO_URL
       cd $APP_DIR
   fi
+
+  echo "Verifying server/vite.ts content..."
+  head -n 20 server/vite.ts
 
   echo -e "${GREEN}4. Configuring Environment...${NC}"
   if [ ! -f .env ]; then
@@ -82,7 +86,7 @@ EOL
   fi
 
   echo -e "${GREEN}5. Starting Services...${NC}"
-  docker compose -f docker-compose.prod.yml up -d --build
+  docker compose -f docker-compose.prod.yml up -d --build --force-recreate
 
   echo -e "${GREEN}6. Initializing Database...${NC}"
   echo "Waiting for application to be ready..."
