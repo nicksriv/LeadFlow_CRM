@@ -3,6 +3,14 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { log, serveStatic } from "./utils";
 
+// Polyfill for esbuild's __name helper which sometimes goes missing in certain environments
+if (typeof (globalThis as any).__name === 'undefined') {
+  (globalThis as any).__name = (target: any, value: any) => {
+    Object.defineProperty(target, 'name', { value, configurable: true });
+    return target;
+  };
+}
+
 const app = express();
 app.use(express.json({ limit: '50mb' })); // Increased limit for screenshot uploads
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));

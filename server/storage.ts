@@ -56,6 +56,12 @@ import {
   type InsertApolloEnrichment,
   type SaleshandySequence,
   type InsertSaleshandySequence,
+  linkedInSessions,
+  type LinkedInSession,
+  type InsertLinkedInSession,
+  scrapedProfiles,
+  type ScrapedProfile,
+  type InsertScrapedProfile,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, or, sql } from "drizzle-orm";
@@ -179,6 +185,16 @@ export interface IStorage {
   createSaleshandySequence(sequence: InsertSaleshandySequence): Promise<SaleshandySequence>;
   getSaleshandySequences(leadId: string): Promise<SaleshandySequence[]>;
   updateSaleshandySequence(id: string, sequence: Partial<InsertSaleshandySequence>): Promise<SaleshandySequence | undefined>;
+
+  // LinkedIn Sessions
+  storeLinkedInSession(userId: string, cookies: any[]): Promise<LinkedInSession>;
+  getLinkedInSession(userId?: string): Promise<LinkedInSession | undefined>;
+  deleteLinkedInSession(userId?: string): Promise<void>;
+  isSessionValid(userId?: string): Promise<boolean>;
+
+  // Scraped Profiles (Archives)
+  createScrapedProfile(profile: InsertScrapedProfile): Promise<ScrapedProfile>;
+  getScrapedProfiles(): Promise<ScrapedProfile[]>;
 
   // Helper methods
   getConversation(id: string): Promise<Conversation | undefined>;
@@ -599,8 +615,8 @@ export class DatabaseStorage implements IStorage {
     });
 
     // Update deal with new stage and probability
-    const probability = deal.probability !== null && deal.probability !== undefined 
-      ? deal.probability 
+    const probability = deal.probability !== null && deal.probability !== undefined
+      ? deal.probability
       : toStage.defaultProbability;
 
     return this.updateDeal(dealId, {
@@ -717,6 +733,98 @@ export class DatabaseStorage implements IStorage {
       .where(eq(saleshandySequences.id, id))
       .returning();
     return sequence || undefined;
+  }
+
+  // LinkedIn Sessions
+  async storeLinkedInSession(userId: string = "default", cookies: any[]): Promise<LinkedInSession> {
+    // Delete existing session for this user
+    await this.deleteLinkedInSession(userId);
+
+    // Calculate expiration (30 days from now, LinkedIn's typical session duration)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    const [session] = await db.insert(linkedInSessions).values({
+      userId,
+      cookies: cookies, // Stored as JSONB
+      isValid: 1,
+      expiresAt,
+      lastUsedAt: new Date(),
+    }).returning();
+
+    return session;
+  }
+
+  async getLinkedInSession(userId: string = "default"): Promise<LinkedInSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(linkedInSessions)
+      .where(
+        and(
+          eq(linkedInSessions.userId, userId),
+          eq(linkedInSessions.isValid, 1)
+        )
+      )
+      .orderBy(desc(linkedInSessions.createdAt))
+      .limit(1);
+
+    if (session) {
+      // Update last used timestamp
+      await db
+        .update(linkedInSessions)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(linkedInSessions.id, session.id));
+    }
+
+    return session || undefined;
+  }
+
+  async deleteLinkedInSession(userId: string = "default"): Promise<void> {
+    await db
+      .delete(linkedInSessions)
+      .where(eq(linkedInSessions.userId, userId));
+  }
+
+  async isSessionValid(userId: string = "default"): Promise<boolean> {
+    const session = await this.getLinkedInSession(userId);
+    if (!session) return false;
+
+    // Check if session is expired
+    const now = new Date();
+    if (session.expiresAt && new Date(session.expiresAt) < now) {
+      // Mark as invalid
+      await db
+        .update(linkedInSessions)
+        .set({ isValid: 0 })
+        .where(eq(linkedInSessions.id, session.id));
+      return false;
+    }
+
+    return true;
+  }
+
+  // Scraped Profiles
+  async createScrapedProfile(insertProfile: InsertScrapedProfile): Promise<ScrapedProfile> {
+    const [profile] = await db
+      .insert(scrapedProfiles)
+      .values(insertProfile)
+      .onConflictDoUpdate({
+        target: scrapedProfiles.url,
+        set: {
+          name: insertProfile.name,
+          headline: insertProfile.headline,
+          location: insertProfile.location,
+          email: insertProfile.email,
+          avatar: insertProfile.avatar,
+          scrapedAt: new Date(),
+        },
+      })
+      .returning();
+    return profile;
+  }
+
+  async getScrapedProfiles(): Promise<ScrapedProfile[]> {
+    return db.select().from(scrapedProfiles).orderBy(desc(scrapedProfiles.scrapedAt));
   }
 }
 

@@ -1,4 +1,4 @@
-import { Home, Users, MessageSquare, Settings, TrendingUp, CheckSquare, UserCog, ChevronUp, LogOut, User as UserIcon, Kanban, Zap } from "lucide-react";
+import { Home, Users, MessageSquare, Settings, TrendingUp, CheckSquare, UserCog, ChevronUp, LogOut, User as UserIcon, Kanban, Zap, BarChart3, Linkedin } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -62,7 +62,12 @@ const menuItems = [
   {
     title: "Analytics",
     url: "/analytics",
-    icon: TrendingUp,
+    icon: BarChart3,
+  },
+  {
+    title: "LinkedIn Outreach",
+    url: "/linkedin-outreach",
+    icon: Linkedin,
   },
   {
     title: "Settings",
@@ -92,17 +97,17 @@ export function AppSidebar() {
 
   const getRoleBadgeConfig = (role: string) => {
     const variants: Record<string, { label: string; className: string }> = {
-      admin: { 
-        label: "Admin", 
-        className: "bg-primary/10 text-primary border-primary/20" 
+      admin: {
+        label: "Admin",
+        className: "bg-primary/10 text-primary border-primary/20"
       },
-      sales_manager: { 
-        label: "Manager", 
-        className: "bg-info/10 text-info border-info/20" 
+      sales_manager: {
+        label: "Manager",
+        className: "bg-info/10 text-info border-info/20"
       },
-      sales_rep: { 
-        label: "Sales Rep", 
-        className: "bg-success/10 text-success border-success/20" 
+      sales_rep: {
+        label: "Sales Rep",
+        className: "bg-success/10 text-success border-success/20"
       },
     };
     return variants[role] || variants.sales_rep;
@@ -173,8 +178,8 @@ export function AppSidebar() {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{currentUser.name}</p>
-                  <Badge 
-                    variant="outline" 
+                  <Badge
+                    variant="outline"
                     className={`mt-1 ${getRoleBadgeConfig(currentUser.role).className}`}
                   >
                     {getRoleBadgeConfig(currentUser.role).label}

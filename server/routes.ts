@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { 
-  insertLeadSchema, 
+import {
+  insertLeadSchema,
   insertConversationSchema,
   insertEmailTemplateSchema,
   insertUserSchema,
@@ -111,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Search Apollo to get contacts
       const searchResult = await searchApolloContacts(filters);
-      
+
       // Filter to only selected contacts if provided
       let contactsToImport = searchResult.contacts;
       if (selectedContactIds && Array.isArray(selectedContactIds) && selectedContactIds.length > 0) {
@@ -134,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (leadData.email) {
             const existingLeads = await storage.getLeads();
             const duplicate = existingLeads.find(l => l.email === leadData.email);
-            
+
             if (duplicate) {
               importResults.skipped.push({
                 contact,
@@ -195,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 100;
 
       const result = await fetchSaleshandyProspects(page, limit);
-      
+
       // Map prospects for frontend display (extract attributes)
       const mappedProspects = result.prospects.map((prospect: any) => {
         const getAttr = (key: string) => {
@@ -233,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch Saleshandy prospects
       const fetchResult = await fetchSaleshandyProspects(page || 1, limit || 100);
-      
+
       // Filter to only selected prospects if provided
       let prospectsToImport = fetchResult.prospects;
       if (selectedProspectIds && Array.isArray(selectedProspectIds) && selectedProspectIds.length > 0) {
@@ -258,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (leadData.email) {
             const existingLeads = await storage.getLeads();
             const duplicate = existingLeads.find(l => l.email === leadData.email);
-            
+
             if (duplicate) {
               importResults.skipped.push({
                 prospect,
@@ -336,8 +336,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sizeInBytes = (imageBase64.length * 3) / 4;
       const maxSizeInMB = 10;
       if (sizeInBytes > maxSizeInMB * 1024 * 1024) {
-        return res.status(400).json({ 
-          error: `Image too large. Maximum size is ${maxSizeInMB}MB. Please upload a smaller screenshot.` 
+        return res.status(400).json({
+          error: `Image too large. Maximum size is ${maxSizeInMB}MB. Please upload a smaller screenshot.`
         });
       }
 
@@ -345,7 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Extract lead data from screenshot using OpenAI Vision
       const extractedData = await extractLeadFromScreenshot(imageBase64);
-      
+
       // Map to lead format
       const leadData = mapScreenshotDataToLead(extractedData);
 
@@ -356,14 +356,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("LinkedIn screenshot OCR error:", error);
-      
+
       // Provide helpful error messages based on error type
       let errorMessage = error.message || "Failed to extract data from screenshot";
       if (error.message?.includes("parse")) {
         errorMessage = "Unable to read the screenshot clearly. Please ensure the screenshot shows a LinkedIn profile page with visible text.";
       }
-      
-      res.status(500).json({ 
+
+      res.status(500).json({
         error: errorMessage,
         details: error.toString(),
       });
@@ -501,10 +501,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validResponseTypes = ["follow-up", "answer-question", "proposal", "closing"];
       const responseType = req.body.responseType || "follow-up";
-      
+
       if (!validResponseTypes.includes(responseType)) {
-        return res.status(400).json({ 
-          error: `Invalid responseType. Must be one of: ${validResponseTypes.join(", ")}` 
+        return res.status(400).json({
+          error: `Invalid responseType. Must be one of: ${validResponseTypes.join(", ")}`
         });
       }
 
@@ -517,7 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .join("\n\n---\n\n");
 
       const draft = await draftEmailResponse(lead.name, conversationHistory, responseType);
-      
+
       res.json(draft);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -539,7 +539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getLeadScores(req.params.id),
       ]);
 
-      const latestScore = leadScores.length > 0 
+      const latestScore = leadScores.length > 0
         ? leadScores.sort((a, b) => new Date(b.analyzedAt).getTime() - new Date(a.analyzedAt).getTime())[0]
         : null;
 
@@ -617,8 +617,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const avgScore =
         allLeads.length > 0
           ? Math.round(
-              allLeads.reduce((sum, l) => sum + l.score, 0) / allLeads.length
-            )
+            allLeads.reduce((sum, l) => sum + l.score, 0) / allLeads.length
+          )
           : 0;
 
       res.json({
@@ -712,7 +712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ms365/webhook", async (req, res) => {
     try {
       const validationToken = req.query.validationToken as string;
-      
+
       // Microsoft Graph validation request
       if (validationToken) {
         return res.send(validationToken);
@@ -778,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/leads/:id/send-email", async (req, res) => {
     try {
       const { subject, body } = req.body;
-      
+
       if (!subject || !subject.trim()) {
         return res.status(400).json({ error: "Subject is required" });
       }
@@ -811,16 +811,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: { conversationId: conversation.id },
         });
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           conversation,
-          warning: "Email stored locally. Configure MS 365 to send actual emails." 
+          warning: "Email stored locally. Configure MS 365 to send actual emails."
         });
       }
 
       // Ensure valid token before sending email
       const accessToken = await ms365Integration.ensureValidToken();
-      
+
       const emailResult = await ms365Integration.sendEmail({
         to: lead.email,
         subject,
@@ -996,7 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertTaskSchema.parse(req.body);
       const task = await storage.createTask(validatedData);
-      
+
       await storage.createActivity({
         leadId: task.leadId,
         type: "task_created",
@@ -1046,11 +1046,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/scoring-config", async (req, res) => {
     try {
       const config = await storage.getScoringConfig();
-      res.json(config || { 
-        sentimentWeight: 25, 
-        engagementWeight: 25, 
-        responseTimeWeight: 25, 
-        intentWeight: 25 
+      res.json(config || {
+        sentimentWeight: 25,
+        engagementWeight: 25,
+        responseTimeWeight: 25,
+        intentWeight: 25
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1104,18 +1104,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/pipelines", async (req, res) => {
     try {
       const validatedData = insertPipelineSchema.parse(req.body);
-      
+
       // Get current default BEFORE creating new pipeline
       const oldDefault = validatedData.isDefault === 1 ? await storage.getDefaultPipeline() : null;
-      
+
       // Create new pipeline
       const pipeline = await storage.createPipeline(validatedData);
-      
+
       // If successfully created as default, demote the old one
       if (pipeline.isDefault === 1 && oldDefault && oldDefault.id !== pipeline.id) {
         await storage.updatePipeline(oldDefault.id, { isDefault: 0 });
       }
-      
+
       res.json(pipeline);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -1125,34 +1125,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/pipelines/:id", async (req, res) => {
     try {
       const validatedData = insertPipelineSchema.partial().parse(req.body);
-      
+
       // Prevent demoting the last default pipeline
       if (validatedData.isDefault === 0) {
         const currentPipeline = await storage.getPipeline(req.params.id);
         if (currentPipeline?.isDefault === 1) {
           const allPipelines = await storage.getPipelines();
           if (allPipelines.length === 1 || allPipelines.filter(p => p.isDefault === 1).length === 1) {
-            return res.status(400).json({ 
-              error: "Cannot remove default status from the only default pipeline. Set another pipeline as default first." 
+            return res.status(400).json({
+              error: "Cannot remove default status from the only default pipeline. Set another pipeline as default first."
             });
           }
         }
       }
-      
+
       // Get old default BEFORE updating (only if we're setting a new default)
       const oldDefault = validatedData.isDefault === 1 ? await storage.getDefaultPipeline() : null;
-      
+
       // Update the pipeline first
       const pipeline = await storage.updatePipeline(req.params.id, validatedData);
       if (!pipeline) {
         return res.status(404).json({ error: "Pipeline not found" });
       }
-      
+
       // If successfully updated to default, demote the old one
       if (pipeline.isDefault === 1 && oldDefault && oldDefault.id !== pipeline.id) {
         await storage.updatePipeline(oldDefault.id, { isDefault: 0 });
       }
-      
+
       res.json(pipeline);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -1164,16 +1164,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for dependent deals
       const deals = await storage.getDeals({ pipelineId: req.params.id });
       if (deals.length > 0) {
-        return res.status(400).json({ 
-          error: `Cannot delete pipeline with ${deals.length} active deal(s). Please reassign or delete the deals first.` 
+        return res.status(400).json({
+          error: `Cannot delete pipeline with ${deals.length} active deal(s). Please reassign or delete the deals first.`
         });
       }
 
       // Check if it's the default pipeline
       const pipeline = await storage.getPipeline(req.params.id);
       if (pipeline?.isDefault === 1) {
-        return res.status(400).json({ 
-          error: "Cannot delete the default pipeline. Set another pipeline as default first." 
+        return res.status(400).json({
+          error: "Cannot delete the default pipeline. Set another pipeline as default first."
         });
       }
 
@@ -1225,8 +1225,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for dependent deals
       const deals = await storage.getDeals({ stageId: req.params.id });
       if (deals.length > 0) {
-        return res.status(400).json({ 
-          error: `Cannot delete stage with ${deals.length} active deal(s). Please move the deals to another stage first.` 
+        return res.status(400).json({
+          error: `Cannot delete stage with ${deals.length} active deal(s). Please move the deals to another stage first.`
         });
       }
 
@@ -1401,7 +1401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate conversation sentiment
       let averageSentiment = 0;
       let recentSentiment: "positive" | "neutral" | "negative" = "neutral";
-      
+
       if (conversations.length > 0) {
         try {
           const sentimentTimeline = await analyzeSentimentTimeline(
@@ -1412,7 +1412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               sentAt: c.sentAt,
             }))
           );
-          
+
           if (sentimentTimeline.length > 0) {
             averageSentiment = sentimentTimeline.reduce((sum, s) => sum + s.score, 0) / sentimentTimeline.length;
             const recent = sentimentTimeline[sentimentTimeline.length - 1];
@@ -1428,7 +1428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lastConversation = conversations.length > 0
         ? conversations.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())[0]
         : null;
-      
+
       const lastContactDays = lastConversation
         ? Math.floor((Date.now() - new Date(lastConversation.sentAt).getTime()) / (1000 * 60 * 60 * 24))
         : 999;
@@ -1464,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const pipelineId = req.query.pipelineId as string | undefined;
       const ownerId = req.query.ownerId as string | undefined;
-      
+
       const deals = await storage.getDeals({
         pipelineId,
         ownerId,
@@ -1499,7 +1499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (deal.expectedCloseDate) {
           const date = new Date(deal.expectedCloseDate);
           const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          
+
           if (!forecast.byMonth[monthKey]) {
             forecast.byMonth[monthKey] = {
               count: 0,
@@ -1582,6 +1582,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // LinkedIn Outreach Routes
+  const { default: linkedinRouter } = await import("./routes/linkedin");
+  app.use("/api/linkedin", linkedinRouter);
+
+  // LinkedIn Authentication Routes
+  const { default: linkedinAuthRouter } = await import("./routes/linkedin-auth");
+  app.use("/api/linkedin/auth", linkedinAuthRouter);
 
   const httpServer = createServer(app);
   return httpServer;

@@ -25,31 +25,31 @@ export type LineOfBusiness = typeof lineOfBusinessOptions[number];
 // Leads table
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  
+
   // Contact Information
   name: text("name").notNull(), // Full name (kept for backward compatibility)
   firstName: text("first_name"),
   lastName: text("last_name"),
   email: text("email").notNull(),
   phone: text("phone"),
-  
+
   // Work Information
   position: text("position"), // Job Title
   department: text("department"),
   industry: text("industry"),
   experience: text("experience"), // Years of experience or description
-  
+
   // Social Profiles
   linkedinUrl: text("linkedin_url"),
   twitterUrl: text("twitter_url"),
   facebookUrl: text("facebook_url"),
   website: text("website"),
-  
+
   // Location Information
   city: text("city"),
   state: text("state"),
   country: text("country"),
-  
+
   // Company Information
   company: text("company"),
   companyDomain: text("company_domain"),
@@ -60,7 +60,7 @@ export const leads = pgTable("leads", {
   companyFoundedYear: integer("company_founded_year"),
   companyLinkedin: text("company_linkedin"),
   companyPhone: text("company_phone"),
-  
+
   // Legacy/System Fields
   lineOfBusiness: text("line_of_business"), // Deprecated, use industry
   status: text("status").notNull().default("cold"), // cold, warm, hot
@@ -148,6 +148,17 @@ export const saleshandySequences = pgTable("saleshandy_sequences", {
   emailsOpened: integer("emails_opened").notNull().default(0),
   emailsClicked: integer("emails_clicked").notNull().default(0),
   emailsReplied: integer("emails_replied").notNull().default(0),
+});
+
+// LinkedIn authentication sessions
+export const linkedInSessions = pgTable("linkedin_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().default("default"), // For multi-user support later
+  cookies: jsonb("cookies").notNull(), // Encrypted LinkedIn cookies
+  isValid: integer("is_valid").notNull().default(1), // 0 or 1
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(), // When session expires
+  lastUsedAt: timestamp("last_used_at"),
 });
 
 // Email templates
@@ -435,7 +446,7 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 }).extend({
   score: z.number().min(0).max(100).optional(),
   status: z.enum(leadStatuses).optional(),
-  
+
   // URL validations for social profiles and websites
   linkedinUrl: z.string().url().optional().or(z.literal("")),
   twitterUrl: z.string().url().optional().or(z.literal("")),
@@ -443,13 +454,13 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
   website: z.string().url().optional().or(z.literal("")),
   companyWebsite: z.string().url().optional().or(z.literal("")),
   companyLinkedin: z.string().url().optional().or(z.literal("")),
-  
+
   // Number validations
   companyFoundedYear: z.number().min(1800).max(new Date().getFullYear()).optional().nullable(),
-  
+
   // Optional legacy field
   lineOfBusiness: z.enum(lineOfBusinessOptions).optional(),
-  
+
   customFields: z.record(z.string(), z.any()).optional(),
 });
 
@@ -553,6 +564,11 @@ export const insertSaleshandySequenceSchema = createInsertSchema(saleshandySeque
   addedAt: true,
 });
 
+export const insertLinkedInSessionSchema = createInsertSchema(linkedInSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
@@ -592,6 +608,28 @@ export type ApolloEnrichment = typeof apolloEnrichments.$inferSelect;
 export type InsertApolloEnrichment = z.infer<typeof insertApolloEnrichmentSchema>;
 export type SaleshandySequence = typeof saleshandySequences.$inferSelect;
 export type InsertSaleshandySequence = z.infer<typeof insertSaleshandySequenceSchema>;
+export type LinkedInSession = typeof linkedInSessions.$inferSelect;
+export type InsertLinkedInSession = z.infer<typeof insertLinkedInSessionSchema>;
+
+// Scraped profiles archive
+export const scrapedProfiles = pgTable("scraped_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  headline: text("headline"),
+  location: text("location"),
+  url: text("url").notNull().unique(), // LinkedIn URL
+  email: text("email"),
+  avatar: text("avatar"),
+  scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
+});
+
+export const insertScrapedProfileSchema = createInsertSchema(scrapedProfiles).omit({
+  id: true,
+  scrapedAt: true,
+});
+
+export type ScrapedProfile = typeof scrapedProfiles.$inferSelect;
+export type InsertScrapedProfile = z.infer<typeof insertScrapedProfileSchema>;
 
 // Extended types with relations
 export type LeadWithRelations = Lead & {

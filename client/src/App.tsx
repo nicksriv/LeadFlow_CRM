@@ -22,6 +22,7 @@ import Automation from "@/pages/automation";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import SettingsAdvanced from "@/pages/settings-advanced";
+import LinkedInOutreach from "@/pages/linkedin-outreach";
 
 function Router() {
   return (
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/team" component={Team} />
       <Route path="/automation" component={Automation} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/linkedin-outreach" component={LinkedInOutreach} />
       <Route path="/settings" component={Settings} />
       <Route path="/settings/advanced" component={SettingsAdvanced} />
       <Route component={NotFound} />
