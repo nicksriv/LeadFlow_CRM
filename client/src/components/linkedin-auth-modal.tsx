@@ -36,11 +36,12 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
         enabled: open,
     });
 
-    const [cookie, setCookie] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
 
     const loginMutation = useMutation({
         mutationFn: async () => {
-            const res = await apiRequest("POST", "/api/linkedin/auth/login", { cookie });
+            const res = await apiRequest("POST", "/api/linkedin/auth/login", { email, password });
             return res.json();
         },
         onMutate: () => {
@@ -58,7 +59,8 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                 setTimeout(() => {
                     onOpenChange(false);
                     setAuthStep("idle");
-                    setCookie("");
+                    setEmail("");
+                    setPassword("");
                 }, 2000);
             } else {
                 setAuthStep("error");
@@ -174,9 +176,9 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                             <div className="flex items-start gap-3">
                                 <Loader2 className="h-5 w-5 text-blue-600 animate-spin mt-0.5" />
                                 <div className="space-y-2">
-                                    <p className="text-sm font-medium text-blue-900">Verifying Cookie...</p>
+                                    <p className="text-sm font-medium text-blue-900">Logging in...</p>
                                     <p className="text-xs text-blue-700">
-                                        Checking your LinkedIn session. This may take a few seconds.
+                                        Automating browser login. This may take a moment.
                                     </p>
                                 </div>
                             </div>
@@ -190,39 +192,41 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                                 <div>
                                     <p className="text-sm font-medium text-red-900">Authentication Failed</p>
                                     <p className="text-xs text-red-700 mt-1">
-                                        Please check your cookie and try again.
+                                        Please check your credentials and try again.
                                     </p>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Cookie Input */}
+                    {/* Credential Inputs */}
                     {!authStatus?.connected && authStep !== "authenticating" && (
                         <div className="space-y-3">
                             <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                    LinkedIn "li_at" Cookie
-                                </label>
+                                <label className="text-sm font-medium leading-none">Email</label>
+                                <input
+                                    type="email"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    placeholder="linkedin@example.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none">Password</label>
                                 <input
                                     type="password"
                                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    placeholder="Paste your li_at cookie here..."
-                                    value={cookie}
-                                    onChange={(e) => setCookie(e.target.value)}
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                 />
                             </div>
 
-                            <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
-                                <h4 className="text-sm font-semibold text-blue-900 mb-2">How to get your cookie:</h4>
-                                <ol className="text-xs text-blue-800 space-y-1.5 ml-4 list-decimal">
-                                    <li>Go to <strong>linkedin.com</strong> and log in</li>
-                                    <li>Right-click anywhere and select <strong>Inspect</strong></li>
-                                    <li>Go to the <strong>Application</strong> tab (or Storage)</li>
-                                    <li>Expand <strong>Cookies</strong> and select <strong>www.linkedin.com</strong></li>
-                                    <li>Find the cookie named <strong>li_at</strong></li>
-                                    <li>Copy its <strong>Value</strong> and paste it above</li>
-                                </ol>
+                            <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3">
+                                <p className="text-xs text-yellow-800">
+                                    <strong>Note:</strong> We do not store your password. It is only used once to create a secure session cookie.
+                                </p>
                             </div>
                         </div>
                     )}
@@ -259,14 +263,14 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                             </Button>
                             <Button
                                 onClick={() => loginMutation.mutate()}
-                                disabled={loginMutation.isPending || authStep === "authenticating" || !cookie}
+                                disabled={loginMutation.isPending || authStep === "authenticating" || !email || !password}
                                 className="w-full sm:w-auto bg-[#0077b5] hover:bg-[#006399]"
                             >
                                 {(loginMutation.isPending || authStep === "authenticating") && (
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 )}
                                 <Linkedin className="mr-2 h-4 w-4" />
-                                Connect
+                                Login
                             </Button>
                         </>
                     )}

@@ -6,18 +6,18 @@ const router = Router();
 
 /**
  * POST /api/linkedin/auth/login
- * Validates and stores manually provided LinkedIn cookie
+ * Authenticates using LinkedIn credentials via headless browser
  */
 router.post("/login", async (req: Request, res: Response) => {
     try {
         console.log("[LinkedIn Auth API] Starting authentication flow...");
-        const { cookie } = req.body;
+        const { email, password } = req.body;
 
-        if (!cookie) {
-            return res.status(400).json({ success: false, message: "Cookie is required" });
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required" });
         }
 
-        const result = await linkedInAuthService.validateAndStoreCookie(cookie);
+        const result = await linkedInAuthService.loginWithCredentials(email, password);
 
         if (result.success) {
             res.json({ success: true, message: result.message });
