@@ -59,11 +59,18 @@ export class LinkedInScraperService {
             console.log(`[LinkedIn Scraper] Starting search with authenticated session (Optimized v2)...`);
 
             // Launch browser - make it visible for debugging
+            // Launch browser - make it visible for debugging
             this.browser = await puppeteer.launch({
                 headless: true, // Background mode
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
                     '--disable-blink-features=AutomationControlled',
                     '--start-maximized',
                 ],
@@ -490,9 +497,15 @@ export class LinkedInScraperService {
 
             this.browser = await puppeteer.launch({
                 headless: true, // Background mode
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
                     '--disable-blink-features=AutomationControlled',
                     '--start-maximized',
                 ],

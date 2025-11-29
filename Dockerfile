@@ -23,7 +23,17 @@ COPY package*.json ./
 # Install production dependencies
 COPY package*.json ./
 RUN npm ci --only=production
-RUN apk add --no-cache curl
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    curl
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
