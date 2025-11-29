@@ -10,6 +10,8 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/leadflow_crm
       - SESSION_SECRET=${SESSION_SECRET:-supersecretkey}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LINKEDAPI_TOKEN=${LINKEDAPI_TOKEN}
+      - LINKEDAPI_IDENTIFICATION_TOKEN=${LINKEDAPI_IDENTIFICATION_TOKEN}
     depends_on:
       - db
     networks:
