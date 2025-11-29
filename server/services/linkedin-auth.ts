@@ -15,99 +15,84 @@ export class LinkedInAuthService {
      * Opens a visible browser window for user to log in
      * Waits for successful login and captures cookies
      */
-    async initiateLogin(): Promise<{ success: boolean; message: string }> {
+    /**
+     * Validate and store manually provided LinkedIn cookie
+     */
+    async validateAndStoreCookie(li_at: string): Promise<{ success: boolean; message: string }> {
         try {
-            console.log("[LinkedIn Auth] Launching browser for authentication...");
+            console.log("[LinkedIn Auth] Validating provided cookie...");
 
-            // Launch browser in non-headless mode so user can see and interact
+            if (!li_at) {
+                throw new Error("No cookie provided");
+            }
+
+            // Create a temporary browser instance to validate the cookie
+            // We use the same headless config as the scraper
             this.browser = await puppeteer.launch({
-                headless: false,
+                headless: true,
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
                 args: [
-                    '--start-maximized',
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
                     '--disable-blink-features=AutomationControlled',
                 ],
             });
 
             this.page = await this.browser.newPage();
 
-            // Set viewport
-            await this.page.setViewport({ width: 1366, height: 768 });
-
-            // Set realistic user agent
-            await this.page.setUserAgent(
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            );
-
-            // Navigate to LinkedIn login page
-            console.log("[LinkedIn Auth] Navigating to LinkedIn login page...");
-            await this.page.goto('https://www.linkedin.com/login', {
-                waitUntil: 'networkidle2',
+            // Set cookie
+            await this.page.setCookie({
+                name: 'li_at',
+                value: li_at,
+                domain: '.linkedin.com',
+                path: '/',
+                httpOnly: true,
+                secure: true,
+                sameSite: 'None',
             });
 
-            console.log("[LinkedIn Auth] Waiting for user to log in...");
-            console.log("[LinkedIn Auth] Please log in to LinkedIn in the browser window");
+            // Navigate to LinkedIn feed to verify
+            console.log("[LinkedIn Auth] Navigating to LinkedIn to verify session...");
+            await this.page.goto('https://www.linkedin.com/feed/', {
+                waitUntil: 'domcontentloaded',
+                timeout: 30000,
+            });
 
-            // Wait for successful login - detect redirect to feed or home
-            // We'll wait up to 5 minutes (300 seconds) for user to login
-            try {
-                await this.page.waitForFunction(
-                    () => {
-                        const url = window.location.href;
-                        return url.includes('/feed') ||
-                            url.includes('/mynetwork') ||
-                            url.includes('/messaging') ||
-                            url.includes('/jobs') ||
-                            (url === 'https://www.linkedin.com/' && !url.includes('/login'));
-                    },
-                    { timeout: 300000 } // 5 minutes
-                );
+            const url = this.page.url();
+            const isLoggedIn = url.includes('/feed') || url.includes('/mynetwork');
 
-                console.log("[LinkedIn Auth] Login successful! Capturing cookies...");
-
-                // Extract all cookies
-                const cookies = await this.page.cookies();
-
-                // Find the important li_at cookie
-                const liAtCookie = cookies.find((c: Cookie) => c.name === 'li_at');
-                if (!liAtCookie) {
-                    throw new Error('Failed to capture LinkedIn session cookie (li_at)');
-                }
-
-                console.log(`[LinkedIn Auth] Captured ${cookies.length} cookies`);
-
-                // Store cookies in database
-                await storage.storeLinkedInSession("default", cookies);
-
-                console.log("[LinkedIn Auth] Session saved successfully!");
-
-                // Close browser
-                await this.cleanup();
-
-                return {
-                    success: true,
-                    message: "LinkedIn account connected successfully!",
-                };
-
-            } catch (waitError: any) {
-                if (waitError.message.includes('timeout')) {
-                    console.log("[LinkedIn Auth] Login timeout - user took too long");
-                    await this.cleanup();
-                    return {
-                        success: false,
-                        message: "Login timeout. Please try again and complete login within 5 minutes.",
-                    };
-                }
-                throw waitError;
+            if (!isLoggedIn) {
+                throw new Error("Invalid cookie or session expired. Please try getting a fresh cookie.");
             }
 
+            console.log("[LinkedIn Auth] Cookie validated successfully!");
+
+            // Get all cookies (in case LinkedIn added more)
+            const cookies = await this.page.cookies();
+
+            // Store cookies in database
+            await storage.storeLinkedInSession("default", cookies);
+
+            console.log("[LinkedIn Auth] Session saved successfully!");
+
+            await this.cleanup();
+
+            return {
+                success: true,
+                message: "LinkedIn account connected successfully!",
+            };
+
         } catch (error: any) {
-            console.error("[LinkedIn Auth] Error during authentication:", error);
+            console.error("[LinkedIn Auth] Error during cookie validation:", error);
             await this.cleanup();
             return {
                 success: false,
-                message: `Authentication failed: ${error.message}`,
+                message: `Validation failed: ${error.message}`,
             };
         }
     }

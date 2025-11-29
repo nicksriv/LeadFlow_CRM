@@ -36,9 +36,11 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
         enabled: open,
     });
 
+    const [cookie, setCookie] = useState("");
+
     const loginMutation = useMutation({
         mutationFn: async () => {
-            const res = await apiRequest("POST", "/api/linkedin/auth/login", {});
+            const res = await apiRequest("POST", "/api/linkedin/auth/login", { cookie });
             return res.json();
         },
         onMutate: () => {
@@ -56,6 +58,7 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                 setTimeout(() => {
                     onOpenChange(false);
                     setAuthStep("idle");
+                    setCookie("");
                 }, 2000);
             } else {
                 setAuthStep("error");
@@ -171,12 +174,9 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                             <div className="flex items-start gap-3">
                                 <Loader2 className="h-5 w-5 text-blue-600 animate-spin mt-0.5" />
                                 <div className="space-y-2">
-                                    <p className="text-sm font-medium text-blue-900">Opening Browser...</p>
+                                    <p className="text-sm font-medium text-blue-900">Verifying Cookie...</p>
                                     <p className="text-xs text-blue-700">
-                                        A browser window will open. Please log in to your LinkedIn account.
-                                    </p>
-                                    <p className="text-xs text-blue-600">
-                                        After logging in, the window will close automatically and your session will be saved.
+                                        Checking your LinkedIn session. This may take a few seconds.
                                     </p>
                                 </div>
                             </div>
@@ -190,24 +190,42 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                                 <div>
                                     <p className="text-sm font-medium text-red-900">Authentication Failed</p>
                                     <p className="text-xs text-red-700 mt-1">
-                                        Please try again or check your LinkedIn credentials
+                                        Please check your cookie and try again.
                                     </p>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Info Box */}
-                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-2">How it works:</h4>
-                        <ul className="text-xs text-blue-800 space-y-1.5 ml-4 list-disc">
-                            <li>A browser window opens to LinkedIn's login page</li>
-                            <li>You log in with your LinkedIn credentials</li>
-                            <li>Your session is securely stored (cookies only)</li>
-                            <li>All searches use your authenticated session</li>
-                            <li>Session typically lasts 30 days</li>
-                        </ul>
-                    </div>
+                    {/* Cookie Input */}
+                    {!authStatus?.connected && authStep !== "authenticating" && (
+                        <div className="space-y-3">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                    LinkedIn "li_at" Cookie
+                                </label>
+                                <input
+                                    type="password"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    placeholder="Paste your li_at cookie here..."
+                                    value={cookie}
+                                    onChange={(e) => setCookie(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                                <h4 className="text-sm font-semibold text-blue-900 mb-2">How to get your cookie:</h4>
+                                <ol className="text-xs text-blue-800 space-y-1.5 ml-4 list-decimal">
+                                    <li>Go to <strong>linkedin.com</strong> and log in</li>
+                                    <li>Right-click anywhere and select <strong>Inspect</strong></li>
+                                    <li>Go to the <strong>Application</strong> tab (or Storage)</li>
+                                    <li>Expand <strong>Cookies</strong> and select <strong>www.linkedin.com</strong></li>
+                                    <li>Find the cookie named <strong>li_at</strong></li>
+                                    <li>Copy its <strong>Value</strong> and paste it above</li>
+                                </ol>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -241,14 +259,14 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                             </Button>
                             <Button
                                 onClick={() => loginMutation.mutate()}
-                                disabled={loginMutation.isPending || authStep === "authenticating"}
+                                disabled={loginMutation.isPending || authStep === "authenticating" || !cookie}
                                 className="w-full sm:w-auto bg-[#0077b5] hover:bg-[#006399]"
                             >
                                 {(loginMutation.isPending || authStep === "authenticating") && (
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 )}
                                 <Linkedin className="mr-2 h-4 w-4" />
-                                Connect LinkedIn
+                                Connect
                             </Button>
                         </>
                     )}

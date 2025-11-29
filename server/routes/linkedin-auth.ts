@@ -6,14 +6,18 @@ const router = Router();
 
 /**
  * POST /api/linkedin/auth/login
- * Initiates LinkedIn authentication flow
- * Opens browser window for user to login
+ * Validates and stores manually provided LinkedIn cookie
  */
 router.post("/login", async (req: Request, res: Response) => {
     try {
         console.log("[LinkedIn Auth API] Starting authentication flow...");
+        const { cookie } = req.body;
 
-        const result = await linkedInAuthService.initiateLogin();
+        if (!cookie) {
+            return res.status(400).json({ success: false, message: "Cookie is required" });
+        }
+
+        const result = await linkedInAuthService.validateAndStoreCookie(cookie);
 
         if (result.success) {
             res.json({ success: true, message: result.message });
