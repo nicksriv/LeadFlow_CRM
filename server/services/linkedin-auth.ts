@@ -18,7 +18,7 @@ export class LinkedInAuthService {
     /**
      * Login using credentials via headless browser automation
      */
-    async loginWithCredentials(email: string, password: string): Promise<{ success: boolean; message: string }> {
+    async loginWithCredentials(email: string, password: string): Promise<{ success: boolean; requires2FA?: boolean; message: string }> {
         try {
             console.log("[LinkedIn Auth] Starting headless login automation...");
 
@@ -76,7 +76,13 @@ export class LinkedInAuthService {
             console.log(`[LinkedIn Auth] Post-login URL: ${url}`);
 
             if (url.includes('/checkpoint/challenge')) {
-                throw new Error("LinkedIn requires security verification (2FA/Captcha). This cannot be handled automatically. Please try logging in manually and copying the 'li_at' cookie.");
+                console.log("[LinkedIn Auth] 2FA Challenge detected. Waiting for code...");
+                // DO NOT close browser. Return status to frontend.
+                return {
+                    success: false,
+                    requires2FA: true,
+                    message: "LinkedIn requires a verification code. Please enter the code sent to your email/phone.",
+                };
             }
 
             if (url.includes('/login') || url.includes('uas/login-submit')) {
@@ -115,6 +121,70 @@ export class LinkedInAuthService {
             return {
                 success: false,
                 message: `Login failed: ${error.message}`,
+            };
+        }
+    }
+
+    /**
+     * Submit 2FA code to the active browser session
+     */
+    async submit2FACode(code: string): Promise<{ success: boolean; message: string }> {
+        try {
+            if (!this.browser || !this.page) {
+                throw new Error("No active login session found. Please try logging in again.");
+            }
+
+            console.log("[LinkedIn Auth] Submitting 2FA code...");
+
+            // Try to find the input field. It varies.
+            // Common IDs: input__phone_verification_pin, input__email_verification_pin
+            const inputSelector = 'input[name="pin"], input#input__phone_verification_pin, input#input__email_verification_pin';
+
+            await this.page.waitForSelector(inputSelector, { timeout: 10000 });
+            await this.page.type(inputSelector, code, { delay: 100 });
+
+            // Click submit button
+            const submitSelector = 'button#two-step-submit-button, button[type="submit"]';
+            await this.page.waitForSelector(submitSelector, { timeout: 5000 });
+
+            await Promise.all([
+                this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }),
+                this.page.click(submitSelector),
+            ]);
+
+            // Verify success
+            const url = this.page.url();
+            console.log(`[LinkedIn Auth] Post-2FA URL: ${url}`);
+
+            if (url.includes('/feed') || url.includes('/mynetwork') || url.includes('/messaging')) {
+                console.log("[LinkedIn Auth] 2FA successful! Capturing cookies...");
+
+                const cookies = await this.page.cookies();
+                const liAtCookie = cookies.find((c: Cookie) => c.name === 'li_at');
+
+                if (!liAtCookie) {
+                    throw new Error('2FA successful but session cookie (li_at) was not found.');
+                }
+
+                await storage.storeLinkedInSession("default", cookies);
+                console.log("[LinkedIn Auth] Session saved successfully!");
+
+                await this.cleanup();
+
+                return {
+                    success: true,
+                    message: "LinkedIn account connected successfully!",
+                };
+            }
+
+            throw new Error("2FA verification failed. Please check the code and try again.");
+
+        } catch (error: any) {
+            console.error("[LinkedIn Auth] Error during 2FA submission:", error);
+            await this.cleanup(); // Cleanup on error to reset state
+            return {
+                success: false,
+                message: `Verification failed: ${error.message}`,
             };
         }
     }

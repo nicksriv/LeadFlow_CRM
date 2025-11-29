@@ -28,7 +28,7 @@ interface AuthStatus {
 
 export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAuthModalProps) {
     const { toast } = useToast();
-    const [authStep, setAuthStep] = useState<"idle" | "authenticating" | "success" | "error">("idle");
+    const [authStep, setAuthStep] = useState<"idle" | "authenticating" | "success" | "error" | "2fa_required" | "verifying_2fa">("idle");
 
     // Check authentication status
     const { data: authStatus, refetch: refetchStatus } = useQuery<AuthStatus>({
@@ -38,6 +38,7 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [twoFactorCode, setTwoFactorCode] = useState("");
 
     const loginMutation = useMutation({
         mutationFn: async () => {
@@ -61,7 +62,14 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                     setAuthStep("idle");
                     setEmail("");
                     setPassword("");
+                    setTwoFactorCode("");
                 }, 2000);
+            } else if (data.requires2FA) {
+                setAuthStep("2fa_required");
+                toast({
+                    title: "Verification Required",
+                    description: data.message,
+                });
             } else {
                 setAuthStep("error");
                 toast({
@@ -75,6 +83,49 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
             setAuthStep("error");
             toast({
                 title: "Authentication Error",
+                description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
+
+    const twoFactorMutation = useMutation({
+        mutationFn: async () => {
+            const res = await apiRequest("POST", "/api/linkedin/auth/2fa", { code: twoFactorCode });
+            return res.json();
+        },
+        onMutate: () => {
+            setAuthStep("verifying_2fa");
+        },
+        onSuccess: (data) => {
+            if (data.success) {
+                setAuthStep("success");
+                toast({
+                    title: "Verification Successful!",
+                    description: data.message,
+                });
+                refetchStatus();
+                onSuccess?.();
+                setTimeout(() => {
+                    onOpenChange(false);
+                    setAuthStep("idle");
+                    setEmail("");
+                    setPassword("");
+                    setTwoFactorCode("");
+                }, 2000);
+            } else {
+                setAuthStep("error");
+                toast({
+                    title: "Verification Failed",
+                    description: data.message,
+                    variant: "destructive",
+                });
+            }
+        },
+        onError: (error: Error) => {
+            setAuthStep("error");
+            toast({
+                title: "Verification Error",
                 description: error.message,
                 variant: "destructive",
             });
@@ -185,6 +236,20 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                         </div>
                     )}
 
+                    {authStep === "verifying_2fa" && (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 animate-in fade-in">
+                            <div className="flex items-start gap-3">
+                                <Loader2 className="h-5 w-5 text-blue-600 animate-spin mt-0.5" />
+                                <div className="space-y-2">
+                                    <p className="text-sm font-medium text-blue-900">Verifying Code...</p>
+                                    <p className="text-xs text-blue-700">
+                                        Submitting your verification code.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {authStep === "error" && (
                         <div className="rounded-lg border border-red-200 bg-red-50 p-4 animate-in fade-in">
                             <div className="flex items-start gap-3">
@@ -200,7 +265,7 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                     )}
 
                     {/* Credential Inputs */}
-                    {!authStatus?.connected && authStep !== "authenticating" && (
+                    {!authStatus?.connected && authStep !== "authenticating" && authStep !== "2fa_required" && authStep !== "verifying_2fa" && (
                         <div className="space-y-3">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium leading-none">Email</label>
@@ -226,6 +291,27 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                             <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3">
                                 <p className="text-xs text-yellow-800">
                                     <strong>Note:</strong> We do not store your password. It is only used once to create a secure session cookie.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2FA Input */}
+                    {authStep === "2fa_required" && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none">Verification Code</label>
+                                <input
+                                    type="text"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    placeholder="Enter 6-digit code"
+                                    value={twoFactorCode}
+                                    onChange={(e) => setTwoFactorCode(e.target.value)}
+                                />
+                            </div>
+                            <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                                <p className="text-xs text-blue-800">
+                                    LinkedIn requires verification. Please enter the code sent to your email or phone.
                                 </p>
                             </div>
                         </div>
@@ -261,17 +347,30 @@ export function LinkedInAuthModal({ open, onOpenChange, onSuccess }: LinkedInAut
                             >
                                 Cancel
                             </Button>
-                            <Button
-                                onClick={() => loginMutation.mutate()}
-                                disabled={loginMutation.isPending || authStep === "authenticating" || !email || !password}
-                                className="w-full sm:w-auto bg-[#0077b5] hover:bg-[#006399]"
-                            >
-                                {(loginMutation.isPending || authStep === "authenticating") && (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                )}
-                                <Linkedin className="mr-2 h-4 w-4" />
-                                Login
-                            </Button>
+                            {authStep === "2fa_required" ? (
+                                <Button
+                                    onClick={() => twoFactorMutation.mutate()}
+                                    disabled={twoFactorMutation.isPending || !twoFactorCode}
+                                    className="w-full sm:w-auto bg-[#0077b5] hover:bg-[#006399]"
+                                >
+                                    {twoFactorMutation.isPending && (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    )}
+                                    Verify Code
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={() => loginMutation.mutate()}
+                                    disabled={loginMutation.isPending || authStep === "authenticating" || !email || !password}
+                                    className="w-full sm:w-auto bg-[#0077b5] hover:bg-[#006399]"
+                                >
+                                    {(loginMutation.isPending || authStep === "authenticating") && (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    )}
+                                    <Linkedin className="mr-2 h-4 w-4" />
+                                    Login
+                                </Button>
+                            )}
                         </>
                     )}
                 </DialogFooter>

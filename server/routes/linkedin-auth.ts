@@ -21,6 +21,8 @@ router.post("/login", async (req: Request, res: Response) => {
 
         if (result.success) {
             res.json({ success: true, message: result.message });
+        } else if (result.requires2FA) {
+            res.json({ success: false, requires2FA: true, message: result.message });
         } else {
             res.status(400).json({ success: false, message: result.message });
         }
@@ -29,6 +31,34 @@ router.post("/login", async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: error.message || "Failed to initiate authentication"
+        });
+    }
+});
+
+/**
+ * POST /api/linkedin/auth/2fa
+ * Submits 2FA code to active session
+ */
+router.post("/2fa", async (req: Request, res: Response) => {
+    try {
+        const { code } = req.body;
+
+        if (!code) {
+            return res.status(400).json({ success: false, message: "Verification code is required" });
+        }
+
+        const result = await linkedInAuthService.submit2FACode(code);
+
+        if (result.success) {
+            res.json({ success: true, message: result.message });
+        } else {
+            res.status(400).json({ success: false, message: result.message });
+        }
+    } catch (error: any) {
+        console.error("[LinkedIn Auth API] 2FA Error:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Failed to submit verification code"
         });
     }
 });
