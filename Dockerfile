@@ -40,6 +40,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder /app/scripts ./scripts
 
 # Expose the port the app runs on
 EXPOSE 5000
