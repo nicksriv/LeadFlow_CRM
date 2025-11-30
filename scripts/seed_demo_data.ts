@@ -61,12 +61,12 @@ async function seed() {
 
             // Create Stages
             const stages = [
-                { name: "Discovery", order: 1, probability: 10 },
-                { name: "Qualification", order: 2, probability: 30 },
-                { name: "Proposal", order: 3, probability: 60 },
-                { name: "Negotiation", order: 4, probability: 80 },
-                { name: "Closed Won", order: 5, probability: 100 },
-                { name: "Closed Lost", order: 6, probability: 0 },
+                { name: "Discovery", order: 1, defaultProbability: 10 },
+                { name: "Qualification", order: 2, defaultProbability: 30 },
+                { name: "Proposal", order: 3, defaultProbability: 60 },
+                { name: "Negotiation", order: 4, defaultProbability: 80 },
+                { name: "Closed Won", order: 5, defaultProbability: 100 },
+                { name: "Closed Lost", order: 6, defaultProbability: 0 },
             ];
 
             for (const stage of stages) {
