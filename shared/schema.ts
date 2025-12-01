@@ -611,11 +611,32 @@ export type InsertSaleshandySequence = z.infer<typeof insertSaleshandySequenceSc
 export type LinkedInSession = typeof linkedInSessions.$inferSelect;
 export type InsertLinkedInSession = z.infer<typeof insertLinkedInSessionSchema>;
 
+// Snov.io API logs
+export const snovioLogs = pgTable("snovio_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id), // Optional link to lead
+  profileUrl: text("profile_url"), // LinkedIn URL searched
+  action: text("action").notNull(), // find_email, get_profile
+  status: text("status").notNull(), // success, failed
+  creditsUsed: integer("credits_used").default(0),
+  responseData: jsonb("response_data"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSnovioLogSchema = createInsertSchema(snovioLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SnovioLog = typeof snovioLogs.$inferSelect;
+export type InsertSnovioLog = z.infer<typeof insertSnovioLogSchema>;
+
 // Scraped profiles archive
 export const scrapedProfiles = pgTable("scraped_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   headline: text("headline"),
+  company: text("company"), // Extracted company name
   location: text("location"),
   url: text("url").notNull().unique(), // LinkedIn URL
   email: text("email"),

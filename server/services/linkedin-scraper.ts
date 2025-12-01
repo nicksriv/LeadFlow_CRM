@@ -823,12 +823,25 @@ export class LinkedInScraperService {
             // console.log('[LinkedIn Scraper] Keeping browser open for 60 seconds for debugging...');
             // await new Promise(resolve => setTimeout(resolve, 60000));
 
+
             // Save to Archives (Database)
             try {
                 const { storage } = await import('../storage.js');
+
+                // Extract company name from headline (e.g., "VP Sales at Microsoft" OR "VP @ Microsoft" → "Microsoft")
+                let companyName: string | null = null;
+                if (profile.headline) {
+                    // Match both "at Company" and "@ Company" patterns, stop at pipe or end
+                    const match = profile.headline.match(/\s+(?:at|@)\s+(.+?)(?:\s*\||$)/i);
+                    if (match && match[1]) {
+                        companyName = match[1].trim();
+                    }
+                }
+
                 await storage.createScrapedProfile({
                     name: profile.name,
                     headline: profile.headline,
+                    company: companyName,
                     location: profile.location,
                     url: url, // Use the input URL as it's cleaner
                     email: email || null,
