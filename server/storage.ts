@@ -62,6 +62,9 @@ import {
   scrapedProfiles,
   type ScrapedProfile,
   type InsertScrapedProfile,
+  snovioLogs,
+  type SnovioLog,
+  type InsertSnovioLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, or, sql } from "drizzle-orm";
@@ -195,10 +198,14 @@ export interface IStorage {
   // Scraped Profiles (Archives)
   createScrapedProfile(profile: InsertScrapedProfile): Promise<ScrapedProfile>;
   getScrapedProfiles(): Promise<ScrapedProfile[]>;
+  updateScrapedProfile(id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined>;
 
   // Helper methods
   getConversation(id: string): Promise<Conversation | undefined>;
   getPipelineStages(pipelineId: string): Promise<PipelineStage[]>;
+
+  // Snov.io Logs
+  logSnovioAction(log: InsertSnovioLog): Promise<SnovioLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -825,6 +832,21 @@ export class DatabaseStorage implements IStorage {
 
   async getScrapedProfiles(): Promise<ScrapedProfile[]> {
     return db.select().from(scrapedProfiles).orderBy(desc(scrapedProfiles.scrapedAt));
+  }
+
+  async updateScrapedProfile(id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined> {
+    const [profile] = await db
+      .update(scrapedProfiles)
+      .set(updates)
+      .where(eq(scrapedProfiles.id, id))
+      .returning();
+    return profile || undefined;
+  }
+
+  // Snov.io Logs
+  async logSnovioAction(insertLog: InsertSnovioLog): Promise<SnovioLog> {
+    const [log] = await db.insert(snovioLogs).values(insertLog).returning();
+    return log;
   }
 }
 
