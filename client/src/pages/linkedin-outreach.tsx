@@ -11,6 +11,7 @@ import { Loader2, Linkedin, Mail, Send, Sparkles, Search, ArrowLeft, User, Brief
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LinkedInAuthModal } from "@/components/linkedin-auth-modal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArchivesTable } from "@/components/ArchivesTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface LinkedInProfile {
@@ -399,9 +400,18 @@ export default function LinkedInOutreach() {
                                             <Card key={result.id} className="hover:shadow-md transition-shadow">
                                                 <CardContent className="p-4 flex items-start gap-4">
                                                     <Avatar className="h-12 w-12">
-                                                        <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                            {result.avatar || result.name.substring(0, 2)}
-                                                        </AvatarFallback>
+                                                        {result.avatar && result.avatar.startsWith('http') ? (
+                                                            <img
+                                                                src={result.avatar}
+                                                                alt={result.name}
+                                                                loading="lazy"
+                                                                className="h-full w-full object-cover rounded-full"
+                                                            />
+                                                        ) : (
+                                                            <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                                {result.name.substring(0, 2).toUpperCase()}
+                                                            </AvatarFallback>
+                                                        )}
                                                     </Avatar>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex justify-between items-start">
@@ -477,9 +487,18 @@ export default function LinkedInOutreach() {
                                             <div className="space-y-6">
                                                 <div className="flex items-start gap-4">
                                                     <Avatar className="h-16 w-16">
-                                                        <AvatarFallback className="text-xl bg-primary/10 text-primary font-bold">
-                                                            {profile.name.substring(0, 2)}
-                                                        </AvatarFallback>
+                                                        {profile.profileImageUrl && profile.profileImageUrl.startsWith('http') ? (
+                                                            <img
+                                                                src={profile.profileImageUrl}
+                                                                alt={profile.name}
+                                                                loading="lazy"
+                                                                className="h-full w-full object-cover rounded-full"
+                                                            />
+                                                        ) : (
+                                                            <AvatarFallback className="text-xl bg-primary/10 text-primary font-bold">
+                                                                {profile.name.substring(0, 2).toUpperCase()}
+                                                            </AvatarFallback>
+                                                        )}
                                                     </Avatar>
                                                     <div>
                                                         <h3 className="text-xl font-bold">{profile.name}</h3>
@@ -594,72 +613,14 @@ export default function LinkedInOutreach() {
                                 </Card>
                             </div>
                         )
-                    )}
-                </TabsContent>
+                    )
+                    }
+                </TabsContent >
 
                 <TabsContent value="archives" className="mt-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Archived Profiles</CardTitle>
-                            <CardDescription>
-                                History of scraped profiles and extracted emails.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Headline</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>LinkedIn URL</TableHead>
-                                        <TableHead>Scraped At</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {archives?.map((profile) => (
-                                        <TableRow key={profile.id}>
-                                            <TableCell className="font-medium">{profile.name}</TableCell>
-                                            <TableCell className="max-w-xs truncate" title={profile.headline}>{profile.headline}</TableCell>
-                                            <TableCell>
-                                                {profile.email ? (
-                                                    <span className="text-green-600 font-medium flex items-center gap-1">
-                                                        <Mail className="h-3 w-3" />
-                                                        {profile.email}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-sm">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <a
-                                                    href={profile.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:underline flex items-center gap-1"
-                                                >
-                                                    <Linkedin className="h-3 w-3" />
-                                                    View Profile
-                                                </a>
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-sm">
-                                                {new Date(profile.scrapedAt).toLocaleDateString()}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {(!archives || archives.length === 0) && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                                No profiles archived yet.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                    <ArchivesTable />
                 </TabsContent>
-            </Tabs>
-        </div>
+            </Tabs >
+        </div >
     );
 }
