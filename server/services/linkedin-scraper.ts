@@ -5,6 +5,9 @@ import { linkedInAuthService } from "./linkedin-auth.js";
 
 puppeteer.use(StealthPlugin());
 
+// Fallback email for development/testing when no email is found
+const FALLBACK_EMAIL = "technology@codescribed.com";
+
 interface SearchFilters {
     jobTitle?: string;
     industry?: string;
@@ -472,6 +475,8 @@ export class LinkedInScraperService {
                 const hasResults = await this.page.evaluate(() => {
                     return document.querySelectorAll('a[href*="/in/"]').length;
                 });
+
+                console.log('[LinkedIn Scraper] Data extraction complete');
                 console.log(`[LinkedIn Scraper] Total profile links found: ${hasResults}`);
             }
 
@@ -550,6 +555,7 @@ export class LinkedInScraperService {
 
             // Extract email from Contact Info
             let email = '';
+            let profileImageUrl: string | null = null;
             try {
                 console.log('[LinkedIn Scraper] Attempting to extract email from Contact Info...');
 
@@ -601,15 +607,19 @@ export class LinkedInScraperService {
             const profile = await this.page.evaluate(function () {
                 // --- NAME ---
                 let name = '';
-                // Strategy 1: Title tag (most reliable)
-                if (document.title) {
-                    name = document.title.split(' | ')[0].trim();
+                // Strategy 1: From page title
+                const title = document.title;
+                if (title && !title.includes('LinkedIn')) {
+                    name = title.replace(/\s*\|.*$/, '').trim();
+                    // Remove notification badges like "(1) "
+                    name = name.replace(/^\(\d+\)\s+/, '');
                 }
-                // Strategy 2: H1 tag
+                // Strategy 2: From h1 tag
                 if (!name) {
                     const h1 = document.querySelector('h1');
-                    if (h1) name = h1.textContent?.trim() || '';
+                    name = h1?.textContent?.trim() || 'LinkedIn Member';
                 }
+
 
                 // --- HEADLINE ---
                 let headline = '';
@@ -678,6 +688,11 @@ export class LinkedInScraperService {
                             const fullText = container.innerText || container.textContent || '';
                             about = fullText.replace(/About/i, '').trim();
                         }
+
+                        // Remove duplicate lines (sometimes LinkedIn repeats content)
+                        const lines = about.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                        const uniqueLines = Array.from(new Set(lines));
+                        about = uniqueLines.join('\n');
                     }
                 }
 
@@ -736,15 +751,53 @@ export class LinkedInScraperService {
                     }
                 }
 
-                // --- POSTS ---
+                // Deduplicate and fix concatenated skills
+                const processedSkills: string[] = [];
+                const seen = new Set<string>();
+
+                for (const skill of skills) {
+                    // Split concatenated skills (e.g., "Business DevelopmentBusiness Development" -> ["Business Development"])
+                    // Pattern: repeatedly find and extract the first meaningful phrase before it repeats
+                    const cleanSkill = skill.trim();
+
+                    // Check if skill is duplicated within itself (e.g., "ABCABC")
+                    const halfLength = Math.floor(cleanSkill.length / 2);
+                    const firstHalf = cleanSkill.substring(0, halfLength);
+                    const secondHalf = cleanSkill.substring(halfLength);
+
+                    let finalSkill = cleanSkill;
+                    if (firstHalf === secondHalf && firstHalf.length > 0) {
+                        // It's duplicated, use only first half
+                        finalSkill = firstHalf;
+                    }
+
+                    // Add to results if not already seen
+                    const normalized = finalSkill.toLowerCase();
+                    if (!seen.has(normalized) && finalSkill.length > 1 && finalSkill.length < 50) {
+                        seen.add(normalized);
+                        processedSkills.push(finalSkill);
+                    }
+                }
+
+                // Replace skills array with processed version
+                skills.length = 0;
+                skills.push(...processedSkills);
+
+                console.log('[LinkedIn Scraper] Extracting posts...');
                 const posts: string[] = [];
                 const postElements = document.querySelectorAll('.feed-shared-update-v2__description, .feed-shared-text, .update-components-text');
+                const seenPosts = new Set<string>();
                 for (let i = 0; i < postElements.length; i++) {
-                    if (i >= 5) break;
+                    if (posts.length >= 5) break; // Limit to 5 unique posts
                     const el = postElements[i];
                     const postText = el.textContent?.trim();
                     if (postText && postText.length > 20) {
-                        posts.push(postText.substring(0, 500));
+                        // Deduplicate by checking first 100 chars
+                        const postKey = postText.substring(0, 100);
+                        if (!seenPosts.has(postKey)) {
+                            seenPosts.add(postKey);
+                            posts.push(postText); // Store full text, not truncated
+                        }
                     }
                 }
 
@@ -793,30 +846,75 @@ export class LinkedInScraperService {
                 };
 
                 return {
-                    name,
-                    headline,
+                    name: name,
+                    headline: headline,
                     about: about.substring(0, 1000), // Limit length
-                    location,
-                    education,
-                    skills: skills.slice(0, 15),
-                    posts,
-                    experiences,
-                    interests,
-                    activityIndicators,
+                    location: location,
+                    education: education,
+                    skills: skills,
+                    posts: posts,
+                    experiences: experiences,
+                    interests: interests,
+                    activityIndicators: {
+                        hasRecentPosts: posts.length > 0,
+                        postCount: posts.length,
+                        skillCount: skills.length,
+                        interestCount: interests.length
+                    }
                 };
             });
 
+            // Extract profile image (MUST be outside page.evaluate)
+            console.log('[LinkedIn Scraper] ===== Starting profile image extraction =====');
+            console.log('[LinkedIn Scraper] Current profileImageUrl value:', profileImageUrl);
+            const imgSelectors = [
+                // THE CORRECT SELECTOR - Main profile card large photo
+                'img.pv-top-card-profile-picture__image--show',
+                // Fallbacks in order of specificity
+                'img.UgnrzJlIRcvqEIOsvocDXABYdVjhAtGscSZRQ', // LinkedIn's obfuscated class
+                'img[alt]:not([alt*="Nikhil"]):not(.global-nav__me-photo)[src*="profile-displayphoto"][width="200"]',
+                'img.pv-top-card-profile-picture__image',
+                'div.pv-top-card img[width="200"]',
+                'img.profile-photo',
+                'img[data-delayed-url*="profile"]',
+                '.pv-top-card--photo img',
+                'button.pv-top-card-profile-picture img'
+            ];
+
+            for (const selector of imgSelectors) {
+                console.log(`[LinkedIn Scraper] Trying selector: ${selector}`);
+                const img = await this.page.$(selector);
+                if (img) {
+                    console.log(`[LinkedIn Scraper] Found element with selector: ${selector}`);
+                    const src = await img.evaluate((el: any) => el.src || el.getAttribute('data-delayed-url'));
+                    console.log(`[LinkedIn Scraper] Extracted src:`, src);
+                    if (src && src.startsWith('http')) {
+                        profileImageUrl = src;
+                        console.log('[LinkedIn Scraper] ✅ SUCCESS! Profile image URL set to:', profileImageUrl);
+                        break;
+                    } else {
+                        console.log(`[LinkedIn Scraper] ❌ Src is invalid or missing:`, src);
+                    }
+                } else {
+                    console.log(`[LinkedIn Scraper] ❌ Element not found for selector: ${selector}`);
+                }
+            }
+
+            console.log('[LinkedIn Scraper] ==== Final profileImageUrl value:', profileImageUrl);
+
             // Add email and other required fields to profile object
-            (profile as any).email = email;
+            // Use fallback email if no email was found
+            (profile as any).email = email || FALLBACK_EMAIL;
             (profile as any).url = url;
             (profile as any).id = url.split('/in/')[1]?.split('/')[0] || 'unknown';
+            (profile as any).profileImageUrl = profileImageUrl;
 
             console.log(`[LinkedIn Scraper] Extracted profile data:`, {
                 name: profile.name,
                 skills: profile.skills.length,
                 posts: profile.posts.length,
                 interests: profile.interests.length,
-                email: email ? 'Found' : 'Not found'
+                email: email ? `Found: ${email}` : `Using fallback: ${FALLBACK_EMAIL}`
             });
 
             // Keep browser open for a short time for debugging if needed, but not 60s
@@ -844,8 +942,10 @@ export class LinkedInScraperService {
                     company: companyName,
                     location: profile.location,
                     url: url, // Use the input URL as it's cleaner
-                    email: email || null,
-                    avatar: null // Avatar extraction not implemented yet
+                    email: email || FALLBACK_EMAIL,
+                    avatar: profileImageUrl,
+                    about: profile.about || null,
+                    skills: profile.skills || []
                 });
                 console.log('[LinkedIn Scraper] Profile saved to archives');
             } catch (dbError) {

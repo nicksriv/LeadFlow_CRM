@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { LinkedApiService } from "../services/linkedapi.js";
+import { ms365Integration } from "../ms365.js";
 
 const linkedApi = new LinkedApiService();
 
@@ -197,35 +198,71 @@ router.post("/send-email", async (req, res) => {
     try {
         const { to, subject, body, profile } = req.body;
 
-        // Simulate sending delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        let emailSent = false;
+        let sendMethod = "mock";
 
-        console.log(`[Mock Email Sender] Sending to: ${to}`);
-        console.log(`Subject: ${subject}`);
-        console.log(`Body: ${body}`);
+        // Try to send via MS365 if configured
+        const syncState = await storage.getSyncState();
+
+        if (syncState && syncState.isConfigured === 1) {
+            try {
+                console.log(`[MS365] Attempting to send email to: ${to}`);
+                const accessToken = await ms365Integration.ensureValidToken();
+                await ms365Integration.sendEmail({
+                    to,
+                    subject,
+                    body,
+                    accessToken
+                });
+                console.log(`[MS365] Email sent successfully to: ${to}`);
+                emailSent = true;
+                sendMethod = "ms365";
+            } catch (ms365Error) {
+                console.error("[MS365] Failed to send email, falling back to mock:", ms365Error);
+                // Fall through to mock sender
+            }
+        }
+
+        // Fallback to mock if MS365 not configured or failed
+        if (!emailSent) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            console.log(`[Mock Email Sender] Sending to: ${to}`);
+            console.log(`Subject: ${subject}`);
+            console.log(`Body: ${body}`);
+        }
 
         // CRM Integration: Create Lead and Conversation
         if (profile && to) {
             try {
-                // 1. Check if lead exists
+                // 1. Check if lead exists - use LinkedIn URL as unique identifier
                 const leads = await storage.getLeads();
-                let lead = leads.find(l => l.email === to);
+                let lead = leads.find(l => l.linkedinUrl === profile.url);
 
-                // 2. If not, create new lead
+                // 2. If not found by URL, create new lead
                 if (!lead) {
-                    console.log("[CRM Integration] Creating new lead for:", to);
+                    console.log("[CRM Integration] Creating new lead for:", profile.name, "with URL:", profile.url);
                     lead = await storage.createLead({
                         name: profile.name,
                         email: to,
                         position: profile.headline,
-                        linkedinUrl: profile.url,
-                        // Parse location if possible, otherwise store in city
+                        linkedinUrl: profile.url,  // Unique identifier
                         city: profile.location,
-                        status: "cold",
+                        status: "cold", // New lead starts as cold
                         source: "linkedin_outreach"
-                    } as any); // Type cast as source might not be in schema yet, but extra fields are usually ignored or handled
+                    } as any);
+                    console.log("[CRM Integration] Created new lead:", lead.id);
                 } else {
-                    console.log("[CRM Integration] Found existing lead:", lead.id);
+                    console.log("[CRM Integration] Found existing lead by LinkedIn URL:", lead.id);
+                    // Update email if changed
+                    if (lead.email !== to) {
+                        await storage.updateLead(lead.id, { email: to });
+                        console.log("[CRM Integration] Updated lead email");
+                    }
+                    // Update lead status to "contacted" if currently "cold"
+                    if (lead.status === "cold") {
+                        await storage.updateLead(lead.id, { status: "warm" });
+                        console.log("[CRM Integration] Updated lead status to 'warm'");
+                    }
                 }
 
                 // 3. Create conversation
@@ -240,6 +277,7 @@ router.post("/send-email", async (req, res) => {
                         sentAt: new Date(),
                         isFromLead: 0
                     });
+                    console.log("[CRM Integration] Conversation logged successfully");
                 }
             } catch (crmError) {
                 console.error("[CRM Integration] Failed to create lead/conversation:", crmError);
@@ -247,7 +285,11 @@ router.post("/send-email", async (req, res) => {
             }
         }
 
-        res.json({ success: true, message: "Email sent successfully (Mock) and logged to CRM" });
+        const message = sendMethod === "ms365"
+            ? "Email sent via MS365 and logged to CRM"
+            : "Email sent (Mock) and logged to CRM";
+
+        res.json({ success: true, message });
     } catch (error) {
         console.error("Email sending error:", error);
         res.status(500).json({ message: "Failed to send email" });

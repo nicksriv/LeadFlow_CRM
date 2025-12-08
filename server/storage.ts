@@ -62,6 +62,7 @@ import {
   scrapedProfiles,
   type ScrapedProfile,
   type InsertScrapedProfile,
+  apifyResults,
   snovioLogs,
   type SnovioLog,
   type InsertSnovioLog,
@@ -199,6 +200,11 @@ export interface IStorage {
   createScrapedProfile(profile: InsertScrapedProfile): Promise<ScrapedProfile>;
   getScrapedProfiles(): Promise<ScrapedProfile[]>;
   updateScrapedProfile(id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined>;
+
+  // Apify Results
+  createApifyResult(result: any): Promise<any>;
+  getApifyResults(): Promise<any[]>;
+  clearApifyResults(): Promise<void>;
 
   // Helper methods
   getConversation(id: string): Promise<Conversation | undefined>;
@@ -820,9 +826,13 @@ export class DatabaseStorage implements IStorage {
         set: {
           name: insertProfile.name,
           headline: insertProfile.headline,
+          company: insertProfile.company,
           location: insertProfile.location,
           email: insertProfile.email,
+          emailConfidence: insertProfile.emailConfidence,
           avatar: insertProfile.avatar,
+          about: insertProfile.about,
+          skills: insertProfile.skills,
           scrapedAt: new Date(),
         },
       })
@@ -841,6 +851,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(scrapedProfiles.id, id))
       .returning();
     return profile || undefined;
+  }
+
+  // Apify Results
+  async createApifyResult(result: any): Promise<any> {
+    const [saved] = await db.insert(apifyResults).values(result).returning();
+    return saved;
+  }
+
+  async getApifyResults(): Promise<any[]> {
+    return await db.select().from(apifyResults).orderBy(desc(apifyResults.createdAt));
+  }
+
+  async clearApifyResults(): Promise<void> {
+    await db.delete(apifyResults);
   }
 
   // Snov.io Logs

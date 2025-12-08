@@ -640,7 +640,10 @@ export const scrapedProfiles = pgTable("scraped_profiles", {
   location: text("location"),
   url: text("url").notNull().unique(), // LinkedIn URL
   email: text("email"),
+  emailConfidence: integer("email_confidence"), // Match confidence (0-100)
   avatar: text("avatar"),
+  about: text("about"), // About section
+  skills: text("skills").array().default(sql`ARRAY[]::text[]`), // Skills array
   scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
 });
 
@@ -651,6 +654,32 @@ export const insertScrapedProfileSchema = createInsertSchema(scrapedProfiles).om
 
 export type ScrapedProfile = typeof scrapedProfiles.$inferSelect;
 export type InsertScrapedProfile = z.infer<typeof insertScrapedProfileSchema>;
+
+// Apify enrichment results
+export const apifyResults = pgTable("apify_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fullName: text("full_name").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  email: text("email"),
+  jobTitle: text("job_title"),
+  linkedinUrl: text("linkedin_url"),
+  companyName: text("company_name"),
+  companyDomain: text("company_domain"),
+  location: text("location"),
+  industry: text("industry"),
+  searchCriteria: jsonb("search_criteria"), // Store the search params used
+  matchedProfileId: varchar("matched_profile_id"), // Reference to scraped_profiles if matched
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertApifyResultSchema = createInsertSchema(apifyResults).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ApifyResult = typeof apifyResults.$inferSelect;
+export type InsertApifyResult = z.infer<typeof insertApifyResultSchema>;
 
 // Extended types with relations
 export type LeadWithRelations = Lead & {
