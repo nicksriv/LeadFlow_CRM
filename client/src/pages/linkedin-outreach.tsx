@@ -22,6 +22,7 @@ interface LinkedInProfile {
     skills: string[];
     email?: string;
     profileImageUrl?: string;
+    url?: string;
 }
 
 interface SearchResult {
@@ -418,7 +419,14 @@ export default function LinkedInOutreach() {
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex justify-between items-start">
                                                             <div>
-                                                                <h4 className="font-semibold text-lg truncate">{result.name}</h4>
+                                                                <a
+                                                                    href={result.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="font-semibold text-lg truncate hover:text-primary hover:underline"
+                                                                >
+                                                                    {result.name}
+                                                                </a>
                                                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                                                                     <Briefcase className="h-3 w-3" />
                                                                     {result.headline}
@@ -503,7 +511,14 @@ export default function LinkedInOutreach() {
                                                         )}
                                                     </Avatar>
                                                     <div>
-                                                        <h3 className="text-xl font-bold">{profile.name}</h3>
+                                                        <a
+                                                            href={profile.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-xl font-bold hover:text-primary hover:underline"
+                                                        >
+                                                            {profile.name}
+                                                        </a>
                                                         <p className="text-muted-foreground">{profile.headline}</p>
                                                         {profile.email && (
                                                             <div className="mt-2 flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 px-3 py-1 rounded-full w-fit">

@@ -181,7 +181,15 @@ export function ArchivesTable() {
                                                     )}
                                                 </Avatar>
                                                 <div>
-                                                    {profile.name}
+                                                    <a
+                                                        href={profile.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="hover:text-primary hover:underline"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {profile.name}
+                                                    </a>
                                                     {profile.emailConfidence && profile.emailConfidence >= 75 && (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 ml-2">
                                                             <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
