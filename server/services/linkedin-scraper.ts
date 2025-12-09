@@ -576,10 +576,29 @@ export class LinkedInScraperService {
 
             // Navigate to profile with realistic wait
             console.log('[LinkedIn Scraper] Navigating to profile...');
-            await this.page.goto(url, {
-                waitUntil: 'networkidle2', // Wait for network to settle
-                timeout: 60000,
-            });
+            try {
+                await this.page.goto(url, {
+                    waitUntil: 'domcontentloaded', // Changed from networkidle2 - LinkedIn blocks network calls
+                    timeout: 120000, // Increased to 120 seconds
+                });
+            } catch (navError: any) {
+                console.error('[LinkedIn Scraper] Navigation failed:', navError.message);
+                // Take screenshot of the blocked/error page
+                await this.page.screenshot({ path: '/tmp/linkedin-navigation-error.png', fullPage: false });
+                console.log('[LinkedIn Scraper] Error screenshot saved to /tmp/linkedin-navigation-error.png');
+
+                // Check if we were redirected or blocked
+                const currentUrl = this.page.url();
+                console.log('[LinkedIn Scraper] Current URL after error:', currentUrl);
+
+                // If LinkedIn redirected us away from the profile, throw a more helpful error
+                if (!currentUrl.includes('/in/')) {
+                    throw new Error('LinkedIn blocked access or session expired. Please reconnect your LinkedIn account.');
+                }
+
+                // If we're on the profile page but it timed out loading, continue anyway
+                console.log('[LinkedIn Scraper] Continuing despite navigation timeout...');
+            }
 
             console.log('[LinkedIn Scraper] Profile page loaded, mimicking human behavior...');
 
