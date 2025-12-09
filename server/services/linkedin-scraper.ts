@@ -500,9 +500,10 @@ export class LinkedInScraperService {
 
             console.log(`[LinkedIn Scraper] Scraping profile: ${url}`);
 
+            console.log('[LinkedIn Scraper] Launching browser with enhanced stealth...');
             this.browser = await puppeteer.launch({
-                headless: true, // Background mode
-                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+                headless: true,
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -511,27 +512,90 @@ export class LinkedInScraperService {
                     '--no-first-run',
                     '--no-zygote',
                     '--disable-gpu',
+                    // Enhanced anti-detection flags
                     '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process,VizDisplayCompositor',
+                    '--flag-switches-begin',
+                    '--disable-site-isolation-trials',
+                    '--flag-switches-end',
+                    '--no-default-browser-check',
+                    '--disable-infobars',
+                    '--window-size=1920,1080',
                     '--start-maximized',
+                    '--disable-popup-blocking',
+                    '--ignore-certificate-errors',
                 ],
             });
 
             this.page = await this.browser.newPage();
-            await this.page.setViewport({ width: 1366, height: 768 });
-            await this.page.setCookie(...cookies);
+
+            // Override webdriver detection
+            await this.page.evaluateOnNewDocument(() => {
+                // Remove webdriver property
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                });
+
+                // Override permissions API
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters: any) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: (Notification as any).permission } as PermissionStatus) :
+                        originalQuery(parameters)
+                );
+
+                // Fix plugins to look more realistic
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5],
+                });
+
+                // Override Chrome property
+                (window as any).chrome = {
+                    runtime: {},
+                };
+            });
+
+            await this.page.setViewport({ width: 1920, height: 1080 });
+
+            // Normalize cookies before setting
+            console.log('[LinkedIn Scraper] Setting normalized cookies...');
+            const normalizedCookies = cookies.map(cookie => ({
+                ...cookie,
+                domain: cookie.domain || '.linkedin.com',
+                path: cookie.path || '/',
+                httpOnly: cookie.httpOnly !== undefined ? cookie.httpOnly : true,
+                secure: cookie.secure !== undefined ? cookie.secure : true,
+                sameSite: (cookie.sameSite as any) || 'Lax',
+            }));
+
+            await this.page.setCookie(...normalizedCookies);
 
             await this.page.setUserAgent(
                 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             );
 
-            // Navigate to profile
+            // Navigate to profile with realistic wait
+            console.log('[LinkedIn Scraper] Navigating to profile...');
             await this.page.goto(url, {
-                waitUntil: 'domcontentloaded',
+                waitUntil: 'networkidle2', // Wait for network to settle
                 timeout: 60000,
             });
 
-            console.log('[LinkedIn Scraper] Profile page loaded, waiting for content...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            console.log('[LinkedIn Scraper] Profile page loaded, mimicking human behavior...');
+
+            // Random delay like a human (1-3 seconds)
+            const humanDelay = Math.random() * 2000 + 1000;
+            await new Promise(resolve => setTimeout(resolve, humanDelay));
+
+            // Simulate human mouse movements
+            await this.page.mouse.move(100, 100);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            await this.page.mouse.move(400, 300);
+            await new Promise(resolve => setTimeout(resolve, 300));
+            await this.page.mouse.move(200, 500);
+
+            // Wait for content to load
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
             // Take screenshot for debugging
             await this.page.screenshot({ path: '/tmp/linkedin-profile-debug.png', fullPage: false });
