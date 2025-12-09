@@ -18,6 +18,7 @@ import {
 import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, generateNextBestAction, analyzeSentimentTimeline, predictDealOutcome } from "./ai";
 import { ms365Integration } from "./ms365";
 import { automationEngine } from "./automation";
+import enrichmentRouter from "./routes/enrichment";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Lead routes
@@ -670,7 +671,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authUrl = ms365Integration.getAuthorizationUrl();
       res.json({ authUrl });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(400).json({
+        error: error.message,
+        hint: "Configure MS365 credentials in your .env file. See Settings page for setup instructions."
+      });
     }
   });
 
@@ -1590,6 +1594,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // LinkedIn Authentication Routes
   const { default: linkedinAuthRouter } = await import("./routes/linkedin-auth");
   app.use("/api/linkedin/auth", linkedinAuthRouter);
+
+  // Enrichment Routes
+  app.use("/api/enrichment", enrichmentRouter);
 
   const httpServer = createServer(app);
   return httpServer;

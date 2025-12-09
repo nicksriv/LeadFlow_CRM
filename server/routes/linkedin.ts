@@ -106,13 +106,13 @@ router.post("/search", async (req, res) => {
 
 router.post("/scrape", async (req, res) => {
     try {
-        const { url, profileId } = req.body;
+        const { url, profileId, name } = req.body;
 
         if (!url && !profileId) {
             return res.status(400).json({ message: "URL or profileId is required" });
         }
 
-        console.log(`[LinkedIn Scraper] Scraping:`, { url, profileId });
+        console.log(`[LinkedIn Scraper] Scraping:`, { url, profileId, name });
 
         // Use authenticated scraper
         const { linkedInScraper } = await import("../services/linkedin-scraper.js");
@@ -120,7 +120,7 @@ router.post("/scrape", async (req, res) => {
         // Construct profile URL if we have profileId
         const profileUrl = url || `https://www.linkedin.com/in/${profileId}`;
 
-        const profile = await linkedInScraper.scrapeProfile(profileUrl);
+        const profile = await linkedInScraper.scrapeProfile(profileUrl, name);
 
         console.log("[LinkedIn Scraper] Scraped profile:", profile);
         return res.json(profile);

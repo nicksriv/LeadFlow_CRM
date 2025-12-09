@@ -55,31 +55,12 @@ export class ApolloEnrichmentService {
             // Update lead if exists
             await this.updateLeadEmail(profile.name, matchedPerson.email);
 
-            // Log enrichment
-            await storage.createApolloEnrichment({
-                leadId: '' as any, // No lead ID for scraped profiles
-                enrichmentData: matchedPerson,
-                fieldsEnriched: ['email'],
-                creditsUsed: 1,
-                status: 'success',
-                errorMessage: null
-            });
+            // Note: Not logging to apollo_enrichments table since it requires a valid lead_id
 
             return { success: true, email: matchedPerson.email, message: 'Email found and updated' };
 
         } catch (error: any) {
             console.error('[Apollo Enrichment] Error:', error);
-
-            // Log error
-            await storage.createApolloEnrichment({
-                leadId: '' as any, // No lead ID for scraped profiles
-                enrichmentData: { error: error.message },
-                fieldsEnriched: [],
-                creditsUsed: 0,
-                status: 'error',
-                errorMessage: error.message
-            });
-
             return { success: false, message: error.message };
         }
     }

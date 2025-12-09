@@ -45,9 +45,26 @@ export class MS365Integration {
   }
 
   /**
+   * Check if MS365 is properly configured with required environment variables
+   */
+  isConfigured(): boolean {
+    return !!(
+      this.config.clientId &&
+      this.config.clientSecret &&
+      this.config.tenantId
+    );
+  }
+
+  /**
    * Get OAuth authorization URL for user to grant permissions
    */
   getAuthorizationUrl(): string {
+    if (!this.isConfigured()) {
+      throw new Error(
+        "MS365 not configured. Please set MS365_CLIENT_ID, MS365_CLIENT_SECRET, and MS365_TENANT_ID environment variables."
+      );
+    }
+
     const baseUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/authorize`;
     const params = new URLSearchParams({
       client_id: this.config.clientId,
@@ -73,7 +90,7 @@ export class MS365Integration {
     expiresIn: number;
   }> {
     const tokenUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/token`;
-    
+
     const params = new URLSearchParams({
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
@@ -98,7 +115,7 @@ export class MS365Integration {
       }
 
       const data = await response.json();
-      
+
       return {
         accessToken: data.access_token,
         refreshToken: data.refresh_token,
@@ -119,7 +136,7 @@ export class MS365Integration {
     expiresIn: number;
   }> {
     const tokenUrl = `https://login.microsoftonline.com/${this.config.tenantId}/oauth2/v2.0/token`;
-    
+
     const params = new URLSearchParams({
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
@@ -143,9 +160,9 @@ export class MS365Integration {
       }
 
       const data = await response.json();
-      
+
       console.log("MS365: Access token refreshed successfully");
-      
+
       return {
         accessToken: data.access_token,
         refreshToken: data.refresh_token || refreshToken,
@@ -177,10 +194,10 @@ export class MS365Integration {
 
     if (needsRefresh && syncState.refreshToken) {
       console.log("MS365: Access token expired or expiring soon, refreshing...");
-      
+
       try {
         const tokens = await this.refreshAccessToken(syncState.refreshToken);
-        
+
         // Update stored tokens
         await storage.updateSyncState({
           accessToken: tokens.accessToken,
@@ -209,7 +226,7 @@ export class MS365Integration {
    * Fetch emails from MS 365 mailbox
    * 
    * Uses Microsoft Graph API: GET /me/messages
-   * Supports delta queries for incremental sync
+   * Note: Delta queries not supported for messages, using regular pagination instead
    * Handles 401 errors with automatic token refresh and retry
    */
   async fetchEmails(
@@ -220,8 +237,8 @@ export class MS365Integration {
     emails: EmailMessage[];
     nextDeltaToken: string;
   }> {
-    const baseUrl = deltaToken || "https://graph.microsoft.com/v1.0/me/messages/delta";
-    const url = deltaToken ? deltaToken : `${baseUrl}?$top=50&$select=id,subject,body,from,toRecipients,sentDateTime,isRead`;
+    // Use regular messages endpoint instead of delta (delta not supported for messages)
+    const url = deltaToken || "https://graph.microsoft.com/v1.0/me/messages?$top=50&$select=id,subject,body,from,toRecipients,sentDateTime,isRead&$orderby=sentDateTime desc";
 
     try {
       const response = await fetch(url, {
@@ -254,8 +271,8 @@ export class MS365Integration {
         isRead: msg.isRead,
       }));
 
-      // Extract delta link for next sync
-      const nextDeltaToken = data["@odata.deltaLink"] || data["@odata.nextLink"] || deltaToken || "";
+      // Get next page link for pagination (instead of delta token)
+      const nextDeltaToken = data["@odata.nextLink"] || "";
 
       return {
         emails,
@@ -303,7 +320,7 @@ export class MS365Integration {
 
       for (const email of emails) {
         const leads = await storage.getLeads();
-        const matchedLead = leads.find((l) => 
+        const matchedLead = leads.find((l) =>
           l.email.toLowerCase() === email.from.toLowerCase()
         );
 
@@ -352,10 +369,10 @@ export class MS365Integration {
    */
   async setupWebhook(callbackUrl: string, accessToken: string): Promise<{ subscriptionId: string }> {
     const url = "https://graph.microsoft.com/v1.0/subscriptions";
-    
+
     // Subscriptions expire after max 3 days for user mailbox resources
     const expirationDateTime = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-    
+
     const payload = {
       changeType: "created",
       notificationUrl: callbackUrl,
@@ -380,9 +397,9 @@ export class MS365Integration {
       }
 
       const data = await response.json();
-      
+
       console.log(`MS365: Webhook subscription created: ${data.id}, expires: ${expirationDateTime}`);
-      
+
       return {
         subscriptionId: data.id,
       };
@@ -390,6 +407,35 @@ export class MS365Integration {
       console.error("MS365: Failed to setup webhook:", error);
       throw error;
     }
+  }
+
+  /**
+   * Convert plain text to professional HTML email format
+   */
+  private convertToHtml(plainText: string): string {
+    // Split into paragraphs by double line breaks
+    const paragraphs = plainText
+      .split(/\n\n+/)
+      .filter(para => para.trim().length > 0)
+      .map(para => {
+        // Convert single line breaks within paragraphs to <br>
+        const formattedPara = para.replace(/\n/g, '<br>');
+        return `<p style="margin: 0 0 16px 0; line-height: 1.6;">${formattedPara}</p>`;
+      })
+      .join('');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          ${paragraphs}
+        </body>
+      </html>
+    `;
   }
 
   /**
@@ -405,13 +451,16 @@ export class MS365Integration {
     isRetry?: boolean;
   }): Promise<{ success: boolean; messageId?: string }> {
     const url = "https://graph.microsoft.com/v1.0/me/sendMail";
-    
+
+    // Convert plain text to HTML
+    const htmlBody = this.convertToHtml(params.body);
+
     const payload = {
       message: {
         subject: params.subject,
         body: {
           contentType: "HTML",
-          content: params.body,
+          content: htmlBody,
         },
         toRecipients: [
           {
@@ -465,7 +514,7 @@ export class MS365Integration {
    */
   async handleWebhookNotification(notification: any, accessToken: string, isRetry: boolean = false): Promise<void> {
     console.log("MS365: Received webhook notification", notification);
-    
+
     // Validate clientState matches what we sent
     const expectedClientState = process.env.MS365_WEBHOOK_SECRET;
     if (notification.clientState && notification.clientState !== expectedClientState) {
@@ -504,14 +553,14 @@ export class MS365Integration {
       }
 
       const message = await response.json();
-      
+
       // Extract email data
       const fromEmail = message.from?.emailAddress?.address;
       if (!fromEmail) return;
 
       // Match with lead
       const leads = await storage.getLeads();
-      const matchedLead = leads.find((l) => 
+      const matchedLead = leads.find((l) =>
         l.email.toLowerCase() === fromEmail.toLowerCase()
       );
 
@@ -529,7 +578,7 @@ export class MS365Integration {
         });
 
         console.log(`MS365: Created conversation for lead ${matchedLead.id} from webhook`);
-        
+
         // TODO: Trigger AI scoring in background
       }
     } catch (error) {

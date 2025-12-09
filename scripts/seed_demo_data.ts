@@ -1,4 +1,4 @@
-
+import "dotenv/config";
 import { db, pool } from "../server/db";
 import {
     users, leads, pipelines, pipelineStages, deals, conversations,

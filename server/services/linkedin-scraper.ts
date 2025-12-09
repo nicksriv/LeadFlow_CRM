@@ -491,14 +491,14 @@ export class LinkedInScraperService {
     /**
      * Scrape individual profile with comprehensive data for email generation
      */
-    async scrapeProfile(url: string): Promise<ProfileResult> {
+    async scrapeProfile(url: string, profileName?: string): Promise<ProfileResult> {
         try {
             const cookies = await linkedInAuthService.getCookies();
             if (!cookies || cookies.length === 0) {
                 throw new Error("Not authenticated. Please connect your LinkedIn account first.");
             }
 
-            console.log(`[LinkedIn Scraper] Scraping profile: ${url}`);
+            console.log(`[LinkedIn Scraper] Scraping profile: ${url}${profileName ? ` (name from search: ${profileName})` : ''}`);
 
             console.log('[LinkedIn Scraper] Launching browser with enhanced stealth...');
             this.browser = await puppeteer.launch({
@@ -686,21 +686,61 @@ export class LinkedInScraperService {
                 console.error('[LinkedIn Scraper] Failed to extract email:', err);
             }
 
+            // Wait for the main profile content to load
+            console.log('[LinkedIn Scraper] Waiting for profile main content to load...');
+            try {
+                // Wait for key profile elements to appear
+                await this.page.waitForSelector('main', { timeout: 10000 });
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Additional wait for dynamic content
+            } catch (e) {
+                console.log('[LinkedIn Scraper] Main content wait timed out, continuing anyway...');
+            }
+
             // Extract comprehensive profile data
             const profile = await this.page.evaluate(function () {
                 // --- NAME ---
                 let name = '';
-                // Strategy 1: From page title
-                const title = document.title;
-                if (title && !title.includes('LinkedIn')) {
-                    name = title.replace(/\s*\|.*$/, '').trim();
-                    // Remove notification badges like "(1) "
-                    name = name.replace(/^\(\d+\)\s+/, '');
+
+                // Strategy 1: Look for specific profile name classes (most reliable)
+                const nameSelectors = [
+                    'h1.text-heading-xlarge',
+                    'h1.inline.t-24.v-align-middle.break-words',
+                    '.pv-text-details__left-panel h1',
+                    'div.ph5 h1'
+                ];
+
+                for (const selector of nameSelectors) {
+                    const el = document.querySelector(selector);
+                    if (el && el.textContent) {
+                        const text = el.textContent.trim();
+                        // Skip if it's the privacy message
+                        if (text && !text.includes('privacy') && !text.includes('LinkedIn') && text.length > 2) {
+                            name = text;
+                            break;
+                        }
+                    }
                 }
-                // Strategy 2: From h1 tag
+
+                // Strategy 2: From page title (but validate it's not a privacy message)
+                if (!name) {
+                    const title = document.title;
+                    if (title && !title.includes('LinkedIn') && !title.includes('privacy')) {
+                        name = title.replace(/\s*\|.*$/, '').trim();
+                        // Remove notification badges like "(1) "
+                        name = name.replace(/^\(\d+\)\s+/, '');
+                    }
+                }
+
+                // Strategy 3: From any h1 tag (last resort)
                 if (!name) {
                     const h1 = document.querySelector('h1');
-                    name = h1?.textContent?.trim() || 'LinkedIn Member';
+                    const h1Text = h1?.textContent?.trim() || '';
+                    // Only use if it's not the privacy message
+                    if (h1Text && !h1Text.includes('privacy') && !h1Text.includes('LinkedIn')) {
+                        name = h1Text;
+                    } else {
+                        name = 'LinkedIn Member'; // Fallback
+                    }
                 }
 
 
@@ -991,6 +1031,12 @@ export class LinkedInScraperService {
             (profile as any).url = url;
             (profile as any).id = url.split('/in/')[1]?.split('/')[0] || 'unknown';
             (profile as any).profileImageUrl = profileImageUrl;
+
+            // Override name if it contains privacy message and we have a better name from search results
+            if (profileName && (profile.name.toLowerCase().includes('privacy') || profile.name.toLowerCase().includes('linkedin'))) {
+                console.log(`[LinkedIn Scraper] Overriding extracted name "${profile.name}" with search result name "${profileName}"`);
+                (profile as any).name = profileName;
+            }
 
             console.log(`[LinkedIn Scraper] Extracted profile data:`, {
                 name: profile.name,

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeadStatusBadge } from "@/components/lead-status-badge";
 import { LeadScoreMeter } from "@/components/lead-score-meter";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Link } from "wouter";
 import type { Lead, LeadStatus } from "@shared/schema";
 import { LeadFormDialog } from "@/components/lead-form-dialog";
@@ -174,16 +175,25 @@ export default function Leads() {
                 data-testid={`card-lead-${lead.id}`}
               >
                 <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                        {lead.name.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate" data-testid="text-lead-name">
-                        {lead.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {lead.company}
-                      </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold truncate" data-testid="text-lead-name">
+                            {lead.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {lead.company}
+                          </p>
+                        </div>
+                        <LeadStatusBadge status={lead.status as LeadStatus} size="sm" />
+                      </div>
                     </div>
-                    <LeadStatusBadge status={lead.status as LeadStatus} size="sm" />
                   </div>
 
                   <div className="space-y-1">
@@ -397,8 +407,8 @@ function ApolloImportTab({ onClose }: { onClose: () => void }) {
             data-testid="input-apollo-companies"
           />
         </div>
-        <Button 
-          onClick={handleSearch} 
+        <Button
+          onClick={handleSearch}
           disabled={searchMutation.isPending}
           data-testid="button-apollo-search"
         >

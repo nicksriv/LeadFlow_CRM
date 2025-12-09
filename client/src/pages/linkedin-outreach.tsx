@@ -21,6 +21,7 @@ interface LinkedInProfile {
     posts: string[];
     skills: string[];
     email?: string;
+    profileImageUrl?: string;
 }
 
 interface SearchResult {
@@ -136,7 +137,8 @@ export default function LinkedInOutreach() {
         mutationFn: async (item: SearchResult) => {
             const res = await apiRequest("POST", "/api/linkedin/scrape", {
                 url: item.url,
-                profileId: item.id
+                profileId: item.id,
+                name: item.name // Pass name from search results
             });
             return res.json();
         },
