@@ -601,13 +601,16 @@ export default function LinkedInOutreach() {
                                             <div className="space-y-4 mt-4 pt-4 border-t">
                                                 <div className="space-y-2">
                                                     <label className="text-sm font-medium">Subject</label>
-                                                    <Input value={emailDraft.subject} readOnly />
+                                                    <Input
+                                                        value={emailDraft.subject}
+                                                        onChange={(e) => setEmailDraft({ ...emailDraft, subject: e.target.value })}
+                                                    />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-sm font-medium">Body</label>
                                                     <Textarea
                                                         value={emailDraft.body}
-                                                        readOnly
+                                                        onChange={(e) => setEmailDraft({ ...emailDraft, body: e.target.value })}
                                                         rows={8}
                                                         className="font-mono text-sm"
                                                     />
