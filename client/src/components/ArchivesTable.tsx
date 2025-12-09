@@ -327,7 +327,16 @@ export function ArchivesTable() {
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="max-w-xs truncate" title={profile.headline || ""}>{profile.headline}</TableCell>
+                                        <TableCell>
+                                            {profile.company ? (
+                                                <div className="flex items-center gap-1">
+                                                    <Building className="h-3 w-3 text-muted-foreground" />
+                                                    <span>{profile.company}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm">-</span>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             {profile.email && profile.email !== 'technology@codescribed.com' ? (
                                                 <div className="flex items-center gap-2">
@@ -348,22 +357,7 @@ export function ArchivesTable() {
                                                 <span className="text-muted-foreground text-sm">-</span>
                                             )}
                                         </TableCell>
-                                        <TableCell>
-                                            <a
-                                                href={profile.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-blue-600 hover:underline flex items-center gap-1"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <Linkedin className="h-3 w-3" />
-                                                View Profile
-                                            </a>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
-                                            {new Date(profile.scrapedAt).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             {!profile.email && (
                                                 <Button
                                                     size="sm"
@@ -384,7 +378,7 @@ export function ArchivesTable() {
 
                                     {isExpanded && (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="bg-muted/30 p-6">
+                                            <TableCell colSpan={5} className="bg-muted/30 p-6">
                                                 <div className="space-y-4">
                                                     {profile.headline && (
                                                         <div>
