@@ -204,14 +204,19 @@ export class HunterEnrichmentService {
 
         // PRIORITY 3: Extract from headline with "at Company" or "@Company"
         if (profile.headline) {
-            const atMatch = profile.headline.match(/@\s*([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-            if (atMatch) {
-                console.log(`[Hunter.io] ✅ Extracted domain from headline @: ${atMatch[1]}`);
-                return atMatch[1];
+            // First check if @ is followed by an actual domain (email pattern)
+            const emailDomainMatch = profile.headline.match(/@\s*([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+            if (emailDomainMatch) {
+                console.log(`[Hunter.io] ✅ Extracted domain from headline @: ${emailDomainMatch[1]}`);
+                return emailDomainMatch[1];
             }
 
             const companyPatterns = [
+                // Pattern 1: Simple "@ Company" - most common LinkedIn format
+                /@\s+([A-Z][A-Za-z0-9\s&.'-]+?)(?:\s*[,|]|$)/i,
+                // Pattern 2: "at Company" 
                 /\bat\s+([A-Z][A-Za-z0-9\s&.'-]+?)(?:\s*[,|]|$)/i,
+                // Pattern 3: Job title with "at/@ Company"
                 /\b(?:CEO|CTO|VP|Vice President|Director|Manager|Head|Lead)\s+(?:at|@)\s+([A-Z][A-Za-z0-9\s&.'-]+?)(?:\s*[,|]|$)/i,
             ];
 
