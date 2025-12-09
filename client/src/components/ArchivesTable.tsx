@@ -260,8 +260,8 @@ export function ArchivesTable() {
                                 </button>
                             </TableHead>
                             <TableHead>Profile</TableHead>
-                            <TableHead>Email</TableHead>
                             <TableHead>Company</TableHead>
+                            <TableHead>Email</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
