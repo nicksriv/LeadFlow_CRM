@@ -196,9 +196,17 @@ export default function LinkedInOutreach() {
             return res.json();
         },
         onSuccess: () => {
+            // Reset email draft state
+            setEmailDraft(null);
+            setProductContext("");
+
+            // Invalidate queries to refresh leads and conversations
+            queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+
             toast({
                 title: "Email Sent",
-                description: "The email has been queued for sending.",
+                description: "The email has been sent and lead has been created.",
             });
         },
         onError: (error: Error) => {
@@ -622,8 +630,16 @@ export default function LinkedInOutreach() {
                                                     }}>
                                                         Copy to Clipboard
                                                     </Button>
-                                                    <Button className="flex-1">
-                                                        <Send className="h-4 w-4 mr-2" />
+                                                    <Button
+                                                        className="flex-1"
+                                                        onClick={() => sendEmailMutation.mutate()}
+                                                        disabled={sendEmailMutation.isPending}
+                                                    >
+                                                        {sendEmailMutation.isPending ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                        ) : (
+                                                            <Send className="h-4 w-4 mr-2" />
+                                                        )}
                                                         Send Email
                                                     </Button>
                                                 </div>
