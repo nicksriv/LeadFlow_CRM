@@ -872,6 +872,78 @@ export class DatabaseStorage implements IStorage {
     const [log] = await db.insert(snovioLogs).values(insertLog).returning();
     return log;
   }
+
+  // LinkedIn Sessions
+  async storeLinkedInSession(sessionId: string, cookies: any[]): Promise<LinkedInSession> {
+    // Extract li_at cookie to determine expiry
+    const liAtCookie = cookies.find((c: any) => c.name === 'li_at');
+    const expiresAt = liAtCookie?.expires
+      ? new Date(liAtCookie.expires * 1000)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days default
+
+    console.log('[Storage] Storing LinkedIn session:', { sessionId, cookieCount: cookies.length, expiresAt });
+
+    // Upsert session
+    const [session] = await db
+      .insert(linkedInSessions)
+      .values({
+        id: sessionId,
+        userId: "default",
+        cookies: cookies as any,
+        expiresAt: expiresAt,
+        createdAt: new Date(),
+        isValid: 1,
+      })
+      .onConflictDoUpdate({
+        target: linkedInSessions.id,
+        set: {
+          cookies: cookies as any,
+          expiresAt: expiresAt,
+          isValid: 1,
+        },
+      })
+      .returning();
+
+    console.log('[Storage] LinkedIn session stored successfully');
+    return session;
+  }
+
+  async getLinkedInSession(sessionId: string = "default"): Promise<LinkedInSession | null> {
+    const [session] = await db
+      .select()
+      .from(linkedInSessions)
+      .where(eq(linkedInSessions.id, sessionId));
+
+    if (!session) {
+      console.log('[Storage] No LinkedIn session found for ID:', sessionId);
+      return null;
+    }
+
+    // Check if expired
+    if (new Date(session.expiresAt) < new Date()) {
+      console.log('[Storage] LinkedIn session expired');
+      return null;
+    }
+
+    // Update last used timestamp
+    await db
+      .update(linkedInSessions)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(linkedInSessions.id, sessionId));
+
+    console.log('[Storage] LinkedIn session retrieved successfully');
+    return session;
+  }
+
+  async isSessionValid(sessionId: string = "default"): Promise<boolean> {
+    const session = await this.getLinkedInSession(sessionId);
+    return session !== null && session.isValid === 1;
+  }
+
+  async deleteLinkedInSession(sessionId: string = "default"): Promise<void> {
+    console.log('[Storage] Deleting LinkedIn session:', sessionId);
+    await db.delete(linkedInSessions).where(eq(linkedInSessions.id, sessionId));
+  }
 }
 
 export const storage = new DatabaseStorage();
