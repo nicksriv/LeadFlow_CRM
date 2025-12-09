@@ -2,6 +2,8 @@ import { Router } from "express";
 import { storage } from "../storage.js";
 import { DatagmaService } from "../services/datagma.js";
 import { ApifyEnrichmentService } from "../services/apify-enrichment.js";
+import { apolloEnrichmentService } from "../services/apollo-enrichment.js";
+import { hunterEnrichmentService } from "../services/hunter-enrichment.js";
 
 const router = Router();
 
@@ -183,6 +185,28 @@ router.post("/apollo/enrich-profile", async (req, res) => {
 
     } catch (error: any) {
         console.error("Apollo Enrichment Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.post("/hunter/enrich-profile", async (req, res) => {
+    try {
+        const { profileUrl } = req.body;
+
+        if (!profileUrl) {
+            return res.status(400).json({ success: false, message: "Profile URL is required" });
+        }
+
+        const result = await hunterEnrichmentService.enrichScrapedProfile(profileUrl);
+
+        if (result.success) {
+            return res.json(result);
+        } else {
+            return res.status(404).json(result);
+        }
+
+    } catch (error: any) {
+        console.error("Hunter.io Enrichment Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

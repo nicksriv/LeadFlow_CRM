@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Mail, Linkedin, Sparkles, Search, X, ChevronDown, ChevronRight, MapPin, Building } from "lucide-react";
+import { Loader2, Mail, Linkedin, Sparkles, Search, X, ChevronDown, ChevronRight, MapPin, Building, CheckSquare, Square } from "lucide-react";
 
 interface ScrapedProfile {
     id: string;
@@ -33,6 +33,9 @@ export function ArchivesTable() {
     const [currentPage, setCurrentPage] = useState(1);
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [enrichingProfileId, setEnrichingProfileId] = useState<string | null>(null);
+    const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
+    const [bulkEnriching, setBulkEnriching] = useState(false);
+    const [enrichmentProgress, setEnrichmentProgress] = useState({ current: 0, total: 0 });
 
     const { data: archives } = useQuery<ScrapedProfile[]>({
         queryKey: ["/api/linkedin/archives"],
@@ -61,6 +64,91 @@ export function ArchivesTable() {
             setEnrichingProfileId(null);
         },
     });
+
+    // Bulk enrichment with Hunter.io
+    const handleBulkEnrich = async () => {
+        const profilesToEnrich = Array.from(selectedProfiles);
+        if (profilesToEnrich.length === 0) {
+            toast({
+                title: "No Profiles Selected",
+                description: "Please select profiles to enrich.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setBulkEnriching(true);
+        setEnrichmentProgress({ current: 0, total: profilesToEnrich.length });
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let i = 0; i < profilesToEnrich.length; i++) {
+            const profileId = profilesToEnrich[i];
+            const profile = archives?.find(p => p.id === profileId);
+
+            if (!profile) {
+                // Skip if profile not found
+                setEnrichmentProgress({ current: i + 1, total: profilesToEnrich.length });
+                continue;
+            }
+
+            // Skip if already has a real email (not the fallback)
+            if (profile.email && profile.email !== 'technology@codescribed.com') {
+                setEnrichmentProgress({ current: i + 1, total: profilesToEnrich.length });
+                continue;
+            }
+
+            try {
+                const res = await apiRequest("POST", "/api/enrichment/hunter/enrich-profile", {
+                    profileUrl: profile.url
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                failCount++;
+            }
+
+            setEnrichmentProgress({ current: i + 1, total: profilesToEnrich.length });
+
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Refresh archives
+        queryClient.invalidateQueries({ queryKey: ["/api/linkedin/archives"] });
+
+        setBulkEnriching(false);
+        setSelectedProfiles(new Set());
+
+        toast({
+            title: "Bulk Enrichment Complete",
+            description: `Successfully enriched ${successCount} profiles. ${failCount} failed.`,
+        });
+    };
+
+    const toggleProfileSelection = (profileId: string) => {
+        const newSelection = new Set(selectedProfiles);
+        if (newSelection.has(profileId)) {
+            newSelection.delete(profileId);
+        } else {
+            newSelection.add(profileId);
+        }
+        setSelectedProfiles(newSelection);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedProfiles.size === paginatedArchives.length) {
+            setSelectedProfiles(new Set());
+        } else {
+            setSelectedProfiles(new Set(paginatedArchives.map(p => p.id)));
+        }
+    };
 
     // Filter archives based on search query
     const filteredArchives = archives?.filter(profile => {
@@ -125,16 +213,56 @@ export function ArchivesTable() {
                     </div>
                 </div>
 
+                {/* Bulk Enrichment Controls */}
+                <div className="mb-4 flex items-center gap-3">
+                    <Button
+                        onClick={handleBulkEnrich}
+                        disabled={bulkEnriching || selectedProfiles.size === 0}
+                        variant="default"
+                        size="sm"
+                    >
+                        {bulkEnriching ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                Enriching {enrichmentProgress.current}/{enrichmentProgress.total}
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                Bulk Enrich ({selectedProfiles.size})
+                            </>
+                        )}
+                    </Button>
+                    {selectedProfiles.size > 0 && (
+                        <Button
+                            onClick={() => setSelectedProfiles(new Set())}
+                            variant="ghost"
+                            size="sm"
+                        >
+                            Clear Selection
+                        </Button>
+                    )}
+                </div>
+
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="w-12"></TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Headline</TableHead>
+                            <TableHead className="w-12">
+                                <button
+                                    onClick={toggleSelectAll}
+                                    className="p-1 hover:bg-muted rounded"
+                                >
+                                    {selectedProfiles.size === paginatedArchives.length && paginatedArchives.length > 0 ? (
+                                        <CheckSquare className="h-4 w-4" />
+                                    ) : (
+                                        <Square className="h-4 w-4" />
+                                    )}
+                                </button>
+                            </TableHead>
+                            <TableHead>Profile</TableHead>
                             <TableHead>Email</TableHead>
-                            <TableHead>LinkedIn URL</TableHead>
-                            <TableHead>Scraped At</TableHead>
-                            <TableHead>Actions</TableHead>
+                            <TableHead>Company</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -148,21 +276,19 @@ export function ArchivesTable() {
                                         onClick={() => toggleExpand(profile.id)}
                                     >
                                         <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 p-0"
+                                            <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    toggleExpand(profile.id);
+                                                    toggleProfileSelection(profile.id);
                                                 }}
+                                                className="p-1 hover:bg-muted rounded"
                                             >
-                                                {isExpanded ? (
-                                                    <ChevronDown className="h-4 w-4" />
+                                                {selectedProfiles.has(profile.id) ? (
+                                                    <CheckSquare className="h-4 w-4 text-primary" />
                                                 ) : (
-                                                    <ChevronRight className="h-4 w-4" />
+                                                    <Square className="h-4 w-4" />
                                                 )}
-                                            </Button>
+                                            </button>
                                         </TableCell>
                                         <TableCell className="font-medium">
                                             <div className="flex items-center gap-3">
@@ -190,7 +316,7 @@ export function ArchivesTable() {
                                                     >
                                                         {profile.name}
                                                     </a>
-                                                    {profile.emailConfidence && profile.emailConfidence >= 75 && (
+                                                    {profile.emailConfidence && (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 ml-2">
                                                             <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                                                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -203,11 +329,21 @@ export function ArchivesTable() {
                                         </TableCell>
                                         <TableCell className="max-w-xs truncate" title={profile.headline || ""}>{profile.headline}</TableCell>
                                         <TableCell>
-                                            {profile.email ? (
-                                                <span className="text-green-600 font-medium flex items-center gap-1">
-                                                    <Mail className="h-3 w-3" />
-                                                    {profile.email}
-                                                </span>
+                                            {profile.email && profile.email !== 'technology@codescribed.com' ? (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-green-600 font-medium flex items-center gap-1">
+                                                        <Mail className="h-3 w-3" />
+                                                        {profile.email}
+                                                    </span>
+                                                    {profile.emailConfidence && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                            </svg>
+                                                            {profile.emailConfidence}%
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <span className="text-muted-foreground text-sm">-</span>
                                             )}

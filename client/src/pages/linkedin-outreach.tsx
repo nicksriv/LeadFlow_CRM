@@ -79,6 +79,7 @@ export default function LinkedInOutreach() {
         const saved = localStorage.getItem("linkedin_profile");
         return saved ? JSON.parse(saved) : null;
     });
+    const [profileId, setProfileId] = useState<string | null>(null); // Track profileId for enrichment
     const [emailDraft, setEmailDraft] = useState<EmailDraft | null>(null);
     const [productContext, setProductContext] = useState("");
 
@@ -146,6 +147,7 @@ export default function LinkedInOutreach() {
         onSuccess: (data) => {
             setProfile(data);
             setSearchMode(false);
+            setProfileId(selectedProfileId); // Use the search result ID which matches database ID
             queryClient.invalidateQueries({ queryKey: ["/api/linkedin/archives"] });
             toast({
                 title: "Profile Analyzed",
@@ -212,6 +214,36 @@ export default function LinkedInOutreach() {
         onError: (error: Error) => {
             toast({
                 title: "Sending Failed",
+                description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
+
+    const hunterEnrichMutation = useMutation({
+        mutationFn: async (profileUrl: string) => {
+            const res = await apiRequest("POST", "/api/enrichment/hunter/enrich-profile", {
+                profileUrl
+            });
+            return res.json();
+        },
+        onSuccess: (data) => {
+            if (data.success && profile) {
+                // Update local profile state with enriched email
+                setProfile({ ...profile, email: data.email });
+
+                // Invalidate archives to refresh
+                queryClient.invalidateQueries({ queryKey: ["/api/linkedin/archives"] });
+
+                toast({
+                    title: "Email Found!",
+                    description: `Found ${data.email} with ${data.confidence}% confidence`,
+                });
+            }
+        },
+        onError: (error: Error) => {
+            toast({
+                title: "Enrichment Failed",
                 description: error.message,
                 variant: "destructive",
             });
@@ -533,6 +565,22 @@ export default function LinkedInOutreach() {
                                                                 <Mail className="h-3 w-3" />
                                                                 {profile.email}
                                                             </div>
+                                                        )}
+                                                        {profileId && profile.url && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="mt-2"
+                                                                onClick={() => hunterEnrichMutation.mutate(profile.url!)}
+                                                                disabled={hunterEnrichMutation.isPending}
+                                                            >
+                                                                {hunterEnrichMutation.isPending ? (
+                                                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                                                ) : (
+                                                                    <Sparkles className="h-3 w-3 mr-1" />
+                                                                )}
+                                                                Enrich Email (Hunter.io)
+                                                            </Button>
                                                         )}
                                                     </div>
                                                 </div>
