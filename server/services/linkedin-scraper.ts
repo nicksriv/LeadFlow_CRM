@@ -503,7 +503,7 @@ export class LinkedInScraperService {
             console.log('[LinkedIn Scraper] Launching browser with enhanced stealth...');
             this.browser = await puppeteer.launch({
                 headless: true,
-                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Use default Chromium in container
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
