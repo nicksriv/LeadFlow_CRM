@@ -10,11 +10,15 @@ router.use(AuthService.requireAuth);
 
 /**
  * GET /api/ms365/status
- * Check if MS365 is connected
+ * Check if MS365 is connected for the authenticated user
  */
 router.get("/status", async (req: Request, res: Response) => {
     try {
-        const syncState = await storage.getSyncState();
+        if (!req.user) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        const syncState = await storage.getSyncStateForUser(req.user.id);
         res.json({
             connected: syncState?.isConfigured === 1,
             lastSyncAt: syncState?.lastSyncAt,
@@ -30,11 +34,15 @@ router.get("/status", async (req: Request, res: Response) => {
 
 /**
  * POST /api/ms365/disconnect
- * Disconnect MS365 account (clear tokens and configuration)
+ * Disconnect MS365 account for the authenticated user (clear tokens and configuration)
  */
 router.post("/disconnect", async (req: Request, res: Response) => {
     try {
-        await storage.updateSyncState({
+        if (!req.user) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        await storage.updateSyncStateForUser(req.user.id, {
             accessToken: null,
             refreshToken: null,
             expiresAt: null,

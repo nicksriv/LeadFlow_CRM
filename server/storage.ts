@@ -92,9 +92,13 @@ export interface IStorage {
   getActivities(leadId: string): Promise<Activity[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
 
-  // Sync State
+  // Sync State (legacy - for backward compatibility)
   getSyncState(): Promise<SyncState | undefined>;
   updateSyncState(data: Partial<SyncState>): Promise<SyncState>;
+
+  // Sync State (user-specific)
+  getSyncStateForUser(userId: string): Promise<SyncState | undefined>;
+  updateSyncStateForUser(userId: string, data: Partial<SyncState>): Promise<SyncState>;
 
   // Email Templates
   getEmailTemplates(): Promise<EmailTemplate[]>;
@@ -330,12 +334,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSyncState(): Promise<SyncState | undefined> {
-    // Get first sync state record (system-wide MS365 configuration)
+    // Legacy method - get first sync state record (system-wide MS365 configuration)
+    // Kept for backward compatibility
     const results = await db.select().from(syncState).limit(1);
     return results[0];
   }
 
   async updateSyncState(data: Partial<SyncState>): Promise<SyncState> {
+    // Legacy method - kept for backward compatibility
     const existing = await this.getSyncState();
     if (existing) {
       // Update existing record
@@ -349,6 +355,35 @@ export class DatabaseStorage implements IStorage {
     // Create new record
     const created = await db.insert(syncState).values(data).returning();
     return created[0];
+  }
+
+  async getSyncStateForUser(userId: string): Promise<SyncState | undefined> {
+    // Get sync state for specific user
+    const [result] = await db
+      .select()
+      .from(syncState)
+      .where(eq(syncState.userId, userId))
+      .limit(1);
+    return result || undefined;
+  }
+
+  async updateSyncStateForUser(userId: string, data: Partial<SyncState>): Promise<SyncState> {
+    const existing = await this.getSyncStateForUser(userId);
+    if (existing) {
+      // Update existing record for this user
+      const [updated] = await db
+        .update(syncState)
+        .set(data)
+        .where(eq(syncState.id, existing.id))
+        .returning();
+      return updated;
+    }
+    // Create new record for this user
+    const [created] = await db
+      .insert(syncState)
+      .values({ ...data, userId })
+      .returning();
+    return created;
   }
 
   async getEmailTemplates(): Promise<EmailTemplate[]> {

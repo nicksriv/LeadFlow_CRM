@@ -279,18 +279,19 @@ router.post("/send-email", async (req, res) => {
         let emailSent = false;
         let sendMethod = "mock";
 
-        // Try to send via MS365 if configured
-        const syncState = await storage.getSyncState();
+        // Try to send via MS365 if configured for this user
+        const syncState = await storage.getSyncStateForUser(req.user!.id);
 
         if (syncState && syncState.isConfigured === 1) {
             try {
                 console.log(`[MS365] Attempting to send email to: ${to}`);
-                const accessToken = await ms365Integration.ensureValidToken();
+                const accessToken = await ms365Integration.ensureValidToken(req.user!.id);
                 await ms365Integration.sendEmail({
                     to,
                     subject,
                     body,
-                    accessToken
+                    accessToken,
+                    userId: req.user!.id,
                 });
                 console.log(`[MS365] Email sent successfully to: ${to}`);
                 emailSent = true;
@@ -326,9 +327,10 @@ router.post("/send-email", async (req, res) => {
                         linkedinUrl: profile.url,  // Unique identifier
                         city: profile.location,
                         status: "cold", // New lead starts as cold
-                        source: "linkedin_outreach"
+                        source: "linkedin_outreach",
+                        ownerId: req.user!.id,  // Set owner to current user
                     } as any);
-                    console.log("[CRM Integration] Created new lead:", lead.id);
+                    console.log("[CRM Integration] Created new lead:", lead.id, "with owner:", req.user!.id);
                 } else {
                     console.log("[CRM Integration] Found existing lead by LinkedIn URL:", lead.id);
                     // Update email if changed

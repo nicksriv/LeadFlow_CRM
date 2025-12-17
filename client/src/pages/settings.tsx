@@ -2,17 +2,21 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Mail, RefreshCw, Link2, CheckCircle2, Settings2, ChevronRight } from "lucide-react";
+import { Mail, RefreshCw, Link2, CheckCircle2, Settings2, ChevronRight, Unplug } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import type { SyncState } from "@shared/schema";
+
+interface MS365Status {
+  connected: boolean;
+  lastSyncAt?: string;
+}
 
 export default function Settings() {
   const { toast } = useToast();
 
-  const { data: syncState } = useQuery<SyncState>({
-    queryKey: ["/api/sync-state"],
+  const { data: ms365Status } = useQuery<MS365Status>({
+    queryKey: ["/api/ms365/status"],
   });
 
   const syncMutation = useMutation({
@@ -20,7 +24,7 @@ export default function Settings() {
       return apiRequest("POST", "/api/sync/manual", {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sync-state"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ms365/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       toast({
@@ -56,7 +60,27 @@ export default function Settings() {
     },
   });
 
-  const isConfigured = syncState?.isConfigured === 1;
+  const disconnectMS365Mutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/ms365/disconnect", {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/ms365/status"] });
+      toast({
+        title: "MS 365 disconnected",
+        description: "Your Microsoft 365 account has been disconnected successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Disconnect failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isConfigured = ms365Status?.connected === true;
 
   return (
     <div className="space-y-6">
@@ -98,11 +122,11 @@ export default function Settings() {
                     {isConfigured ? "Active" : "Not configured"}
                   </Badge>
                 </div>
-                {syncState?.lastSyncAt && (
+                {ms365Status?.lastSyncAt && (
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Last synced</span>
                     <span>
-                      {new Date(syncState.lastSyncAt).toLocaleString()}
+                      {new Date(ms365Status.lastSyncAt).toLocaleString()}
                     </span>
                   </div>
                 )}
@@ -117,7 +141,7 @@ export default function Settings() {
 
               <div className="flex gap-3">
                 {!isConfigured ? (
-                  <Button 
+                  <Button
                     onClick={() => connectMS365Mutation.mutate()}
                     disabled={connectMS365Mutation.isPending}
                     data-testid="button-configure-ms365"
@@ -126,14 +150,25 @@ export default function Settings() {
                     {connectMS365Mutation.isPending ? "Connecting..." : "Connect MS 365"}
                   </Button>
                 ) : (
-                  <Button
-                    onClick={() => syncMutation.mutate()}
-                    disabled={syncMutation.isPending}
-                    data-testid="button-sync-now"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    {syncMutation.isPending ? "Syncing..." : "Sync Now"}
-                  </Button>
+                  <>
+                    <Button
+                      onClick={() => syncMutation.mutate()}
+                      disabled={syncMutation.isPending}
+                      data-testid="button-sync-now"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      {syncMutation.isPending ? "Syncing..." : "Sync Now"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => disconnectMS365Mutation.mutate()}
+                      disabled={disconnectMS365Mutation.isPending}
+                      data-testid="button-disconnect-ms365"
+                    >
+                      <Unplug className="h-4 w-4 mr-2" />
+                      {disconnectMS365Mutation.isPending ? "Disconnecting..." : "Disconnect"}
+                    </Button>
+                  </>
                 )}
               </div>
 

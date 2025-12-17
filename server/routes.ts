@@ -665,16 +665,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/sync/manual", async (req, res) => {
+  app.post("/api/sync/manual", AuthService.requireAuth, async (req, res) => {
     try {
-      const state = await storage.getSyncState();
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const state = await storage.getSyncStateForUser(req.user.id);
       if (!state || state.isConfigured !== 1) {
         return res.status(400).json({
           error: "MS 365 integration not configured. Please configure it in Settings.",
         });
       }
 
-      const result = await ms365Integration.syncEmailsWithLeads();
+      const result = await ms365Integration.syncEmailsWithLeads(req.user.id);
 
       res.json({
         success: true,
@@ -698,8 +702,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/ms365/callback", async (req, res) => {
+  app.get("/api/ms365/callback", AuthService.requireAuth, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.redirect('/settings?ms365=error&message=' + encodeURIComponent('Not authenticated'));
+      }
+
       const authCode = req.query.code as string;
       if (!authCode) {
         return res.status(400).json({ error: "Missing authorization code" });
@@ -708,8 +716,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Exchange code for tokens
       const tokens = await ms365Integration.exchangeCodeForToken(authCode);
 
-      // Store tokens in sync state
-      await storage.updateSyncState({
+      // Store tokens in user-specific sync state
+      await storage.updateSyncStateForUser(req.user.id, {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         expiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
@@ -717,10 +725,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Setup webhook for real-time notifications
+      // Note: Webhooks are per-mailbox, so storing user ID in webhook metadata would be needed for multi-user support
       const webhookUrl = `${process.env.REPL_SLUG ? 'https://' + process.env.REPL_SLUG + '.replit.app' : 'http://localhost:5000'}/api/ms365/webhook`;
       try {
         const webhook = await ms365Integration.setupWebhook(webhookUrl, tokens.accessToken);
-        console.log(`MS365: Webhook setup successful: ${webhook.subscriptionId}`);
+        console.log(`MS365: Webhook setup successful for user ${req.user.id}: ${webhook.subscriptionId}`);
       } catch (error) {
         console.warn("MS365: Failed to setup webhook (will use polling):", error);
       }
@@ -799,8 +808,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/leads/:id/send-email", async (req, res) => {
+  app.post("/api/leads/:id/send-email", AuthService.requireAuth, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
       const { subject, body } = req.body;
 
       if (!subject || !subject.trim()) {
@@ -815,7 +828,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Lead not found" });
       }
 
-      const syncState = await storage.getSyncState();
+      const syncState = await storage.getSyncStateForUser(req.user.id);
       if (!syncState || !syncState.accessToken) {
         const conversation = await storage.createConversation({
           leadId: lead.id,
@@ -843,13 +856,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Ensure valid token before sending email
-      const accessToken = await ms365Integration.ensureValidToken();
+      const accessToken = await ms365Integration.ensureValidToken(req.user.id);
 
       const emailResult = await ms365Integration.sendEmail({
         to: lead.email,
         subject,
         body,
         accessToken,
+        userId: req.user.id,
       });
 
       if (!emailResult.success) {

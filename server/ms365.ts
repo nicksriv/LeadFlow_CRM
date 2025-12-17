@@ -180,8 +180,8 @@ export class MS365Integration {
    * If refresh fails (e.g., revoked token), clears sync state
    * to prompt user reconnection
    */
-  async ensureValidToken(): Promise<string> {
-    const syncState = await storage.getSyncState();
+  async ensureValidToken(userId: string): Promise<string> {
+    const syncState = await storage.getSyncStateForUser(userId);
     if (!syncState || syncState.isConfigured !== 1) {
       throw new Error("MS 365 not configured");
     }
@@ -198,8 +198,8 @@ export class MS365Integration {
       try {
         const tokens = await this.refreshAccessToken(syncState.refreshToken);
 
-        // Update stored tokens
-        await storage.updateSyncState({
+        // Update stored tokens for this user
+        await storage.updateSyncStateForUser(userId, {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
           expiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
@@ -209,7 +209,7 @@ export class MS365Integration {
       } catch (error) {
         // Refresh failed - clear sync state to prompt reconnection
         console.error("MS365: Token refresh failed, clearing integration", error);
-        await storage.updateSyncState({
+        await storage.updateSyncStateForUser(userId, {
           accessToken: null,
           refreshToken: null,
           expiresAt: null,
@@ -232,7 +232,8 @@ export class MS365Integration {
   async fetchEmails(
     accessToken: string,
     deltaToken?: string,
-    isRetry: boolean = false
+    isRetry: boolean = false,
+    userId?: string
   ): Promise<{
     emails: EmailMessage[];
     nextDeltaToken: string;
@@ -249,10 +250,10 @@ export class MS365Integration {
       });
 
       // Handle 401 Unauthorized - token may be invalid
-      if (response.status === 401 && !isRetry) {
+      if (response.status === 401 && !isRetry && userId) {
         console.log("MS365: Received 401, refreshing token and retrying...");
-        const newAccessToken = await this.ensureValidToken();
-        return this.fetchEmails(newAccessToken, deltaToken, true);
+        const newAccessToken = await this.ensureValidToken(userId);
+        return this.fetchEmails(newAccessToken, deltaToken, true, userId);
       }
 
       if (!response.ok) {
@@ -293,33 +294,35 @@ export class MS365Integration {
    * 3. Creates conversation records for matched emails
    * 4. Triggers AI scoring for updated leads
    */
-  async syncEmailsWithLeads(): Promise<{
+  async syncEmailsWithLeads(userId: string): Promise<{
     synced: number;
     matched: number;
     unmatched: number;
   }> {
-    console.log("MS365: Starting email sync with leads...");
+    console.log(`MS365: Starting email sync for user ${userId}...`);
 
     try {
-      const syncState = await storage.getSyncState();
+      const syncState = await storage.getSyncStateForUser(userId);
       if (!syncState || syncState.isConfigured !== 1) {
         throw new Error("MS 365 not configured");
       }
 
       // Ensure we have a valid access token (refresh if expired)
-      const accessToken = await this.ensureValidToken();
+      const accessToken = await this.ensureValidToken(userId);
       const deltaToken = syncState.deltaToken || undefined;
 
       const { emails, nextDeltaToken } = await this.fetchEmails(
         accessToken,
-        deltaToken
+        deltaToken,
+        false,
+        userId
       );
 
       let matched = 0;
       let unmatched = 0;
 
       for (const email of emails) {
-        const leads = await storage.getLeads();
+        const leads = await storage.getLeads({ id: userId, role: 'sales_rep' });
         const matchedLead = leads.find((l) =>
           l.email.toLowerCase() === email.from.toLowerCase()
         );
@@ -342,13 +345,13 @@ export class MS365Integration {
         }
       }
 
-      // Update sync state
-      await storage.updateSyncState({
+      // Update sync state for this user
+      await storage.updateSyncStateForUser(userId, {
         lastSyncAt: new Date(),
         deltaToken: nextDeltaToken,
       });
 
-      console.log(`MS365: Sync complete - ${matched} matched, ${unmatched} unmatched`);
+      console.log(`MS365: Sync complete for user ${userId} - ${matched} matched, ${unmatched} unmatched`);
 
       return {
         synced: emails.length,
@@ -356,7 +359,7 @@ export class MS365Integration {
         unmatched,
       };
     } catch (error) {
-      console.error("MS365: Sync failed:", error);
+      console.error(`MS365: Sync failed for user ${userId}:`, error);
       throw error;
     }
   }
@@ -448,6 +451,7 @@ export class MS365Integration {
     subject: string;
     body: string;
     accessToken: string;
+    userId: string;
     isRetry?: boolean;
   }): Promise<{ success: boolean; messageId?: string }> {
     const url = "https://graph.microsoft.com/v1.0/me/sendMail";
@@ -486,7 +490,7 @@ export class MS365Integration {
       // Handle 401 Unauthorized - token may be invalid
       if (response.status === 401 && !params.isRetry) {
         console.log("MS365: Received 401, refreshing token and retrying...");
-        const newAccessToken = await this.ensureValidToken();
+        const newAccessToken = await this.ensureValidToken(params.userId);
         return this.sendEmail({
           ...params,
           accessToken: newAccessToken,
@@ -512,7 +516,12 @@ export class MS365Integration {
   /**
    * Handle webhook notification from MS 365
    */
-  async handleWebhookNotification(notification: any, accessToken: string, isRetry: boolean = false): Promise<void> {
+  async handleWebhookNotification(
+    notification: any,
+    accessToken: string,
+    userId: string,
+    isRetry: boolean = false
+  ): Promise<void> {
     console.log("MS365: Received webhook notification", notification);
 
     // Validate clientState matches what we sent
@@ -544,8 +553,8 @@ export class MS365Integration {
       // Handle 401 Unauthorized - token may be invalid
       if (response.status === 401 && !isRetry) {
         console.log("MS365: Received 401, refreshing token and retrying...");
-        const newAccessToken = await this.ensureValidToken();
-        return this.handleWebhookNotification(notification, newAccessToken, true);
+        const newAccessToken = await this.ensureValidToken(userId);
+        return this.handleWebhookNotification(notification, newAccessToken, userId, true);
       }
 
       if (!response.ok) {
@@ -558,8 +567,8 @@ export class MS365Integration {
       const fromEmail = message.from?.emailAddress?.address;
       if (!fromEmail) return;
 
-      // Match with lead
-      const leads = await storage.getLeads();
+      // Match with lead - only search in user's accessible leads
+      const leads = await storage.getLeads({ id: userId, role: 'sales_rep' });
       const matchedLead = leads.find((l) =>
         l.email.toLowerCase() === fromEmail.toLowerCase()
       );
