@@ -15,7 +15,7 @@ This guide outlines the steps to deploy the LeadFlow CRM to your Contabo VPS.
 
 ### 1. SSH into your VPS
 ```bash
-ssh root@<your_vps_ip>
+ssh root@213.199.48.187
 ```
 
 ### 2. Install Docker & Docker Compose
@@ -85,6 +85,6 @@ docker compose -f docker-compose.prod.yml exec app npx tsx server/seed.ts
 
 ### 7. Verify Deployment
 Open your browser and navigate to your VPS IP address or domain:
-`http://<your_vps_ip>`
+`http://213.199.48.187`
 
 You should see the LeadFlow CRM login/dashboard.
