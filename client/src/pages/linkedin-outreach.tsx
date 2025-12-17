@@ -189,8 +189,15 @@ export default function LinkedInOutreach() {
 
     const sendEmailMutation = useMutation({
         mutationFn: async () => {
+            // Validate email before sending
+            const isFallbackEmail = !profile?.email || profile.email === 'technology@codescribed.com';
+
+            if (isFallbackEmail) {
+                throw new Error('No valid email address available. Please enrich this profile first to get a real email address.');
+            }
+
             const res = await apiRequest("POST", "/api/linkedin/send-email", {
-                to: profile?.email || "mock-recipient@example.com",
+                to: profile.email,
                 subject: emailDraft?.subject,
                 body: emailDraft?.body,
                 profile: profile
@@ -678,26 +685,37 @@ export default function LinkedInOutreach() {
                                                     }}>
                                                         Copy to Clipboard
                                                     </Button>
-                                                    <Button
-                                                        className="flex-1"
-                                                        onClick={() => sendEmailMutation.mutate()}
-                                                        disabled={sendEmailMutation.isPending}
-                                                    >
-                                                        {sendEmailMutation.isPending ? (
-                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                        ) : (
-                                                            <Send className="h-4 w-4 mr-2" />
+                                                    <>
+                                                        <Button
+                                                            className="flex-1"
+                                                            onClick={() => sendEmailMutation.mutate()}
+                                                            disabled={sendEmailMutation.isPending || !profile?.email || profile.email === 'technology@codescribed.com'}
+                                                        >
+                                                            {sendEmailMutation.isPending ? (
+                                                                <>
+                                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                                    Sending...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Send className="h-4 w-4 mr-2" />
+                                                                    Send Email
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                        {(!profile?.email || profile.email === 'technology@codescribed.com') && (
+                                                            <p className="text-sm text-amber-600 mt-2">
+                                                                ⚠️ No valid email address. Please use "Enrich Email" button above to find a real email address first.
+                                                            </p>
                                                         )}
-                                                        Send Email
-                                                    </Button>
+                                                    </>
                                                 </div>
                                             </div>
                                         )}
                                     </CardContent>
                                 </Card>
                             </div>
-                        )
-                    )
+                        ))
                     }
                 </TabsContent >
 

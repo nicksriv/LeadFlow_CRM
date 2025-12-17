@@ -1,8 +1,12 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { linkedInAuthService } from "../services/linkedin-auth.js";
+import AuthService from "../auth.js";
 
 const router = Router();
+
+// Protect all LinkedIn auth routes with authentication
+router.use(AuthService.requireAuth);
 
 /**
  * POST /api/linkedin/auth/login
@@ -17,7 +21,7 @@ router.post("/login", async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Email and password are required" });
         }
 
-        const result = await linkedInAuthService.loginWithCredentials(email, password);
+        const result = await linkedInAuthService.loginWithCredentials(req.user!.id, email, password);
 
         if (result.success) {
             res.json({ success: true, message: result.message });
@@ -47,7 +51,7 @@ router.post("/2fa", async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Verification code is required" });
         }
 
-        const result = await linkedInAuthService.submit2FACode(code);
+        const result = await linkedInAuthService.submit2FACode(req.user!.id, code);
 
         if (result.success) {
             res.json({ success: true, message: result.message });
@@ -69,7 +73,7 @@ router.post("/2fa", async (req: Request, res: Response) => {
  */
 router.get("/status", async (req: Request, res: Response) => {
     try {
-        const status = await linkedInAuthService.checkStatus();
+        const status = await linkedInAuthService.checkStatus(req.user!.id);
         res.json(status);
     } catch (error: any) {
         console.error("[LinkedIn Auth API] Status check error:", error);
@@ -86,7 +90,7 @@ router.get("/status", async (req: Request, res: Response) => {
  */
 router.post("/logout", async (req: Request, res: Response) => {
     try {
-        await linkedInAuthService.logout();
+        await linkedInAuthService.logout(req.user!.id);
         res.json({ success: true, message: "LinkedIn session cleared" });
     } catch (error: any) {
         console.error("[LinkedIn Auth API] Logout error:", error);

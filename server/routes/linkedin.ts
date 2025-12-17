@@ -6,6 +6,7 @@ import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { LinkedApiService } from "../services/linkedapi.js";
 import { ms365Integration } from "../ms365.js";
+import AuthService from "../auth.js";
 
 const linkedApi = new LinkedApiService();
 
@@ -13,6 +14,9 @@ const linkedApi = new LinkedApiService();
 puppeteer.use(StealthPlugin());
 
 const router = Router();
+
+// Protect all LinkedIn routes with authentication
+router.use(AuthService.requireAuth);
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -70,7 +74,7 @@ router.post("/search", async (req, res) => {
         // Use authenticated scraper instead of LinkedAPI
         const { linkedInScraper } = await import("../services/linkedin-scraper.js");
 
-        const results = await linkedInScraper.searchPeople({
+        const results = await linkedInScraper.searchPeople(req.user!.id, {
             jobTitle,
             industry,
             keywords
@@ -120,7 +124,81 @@ router.post("/scrape", async (req, res) => {
         // Construct profile URL if we have profileId
         const profileUrl = url || `https://www.linkedin.com/in/${profileId}`;
 
-        const profile = await linkedInScraper.scrapeProfile(profileUrl, name);
+        const profile = await linkedInScraper.scrapeProfile(req.user!.id, profileUrl, name);
+
+        console.log("[LinkedIn Scraper] Starting archive save process...");
+        console.log("[LinkedIn Scraper] Profile URL:", profileUrl);
+        console.log("[LinkedIn Scraper] Profile data:", {
+            name: profile.name,
+            headline: profile.headline,
+            url: profileUrl,
+            currentCompany: profile.currentCompany,  // Debug company extraction
+            hasProfileImageUrl: !!profile.profileImageUrl,  // Fix: it's profileImageUrl not avatar
+            hasEmail: !!profile.email
+        });
+
+        // Save to archives - check if profile already exists for this user
+        try {
+            console.log("[LinkedIn Scraper] Fetching existing profiles for user:", req.user!.id);
+            const existingProfiles = await storage.getScrapedProfiles(req.user!);
+            console.log("[LinkedIn Scraper] Found", existingProfiles.length, "existing profiles");
+
+            // Normalize URLs for comparison (remove trailing slashes, query params)
+            const normalizeUrl = (url: string) => url.replace(/\/+$/, '').split('?')[0];
+            const normalizedProfileUrl = normalizeUrl(profileUrl);
+            const existingProfile = existingProfiles.find(p => normalizeUrl(p.url) === normalizedProfileUrl);
+
+            if (existingProfile) {
+                console.log("[LinkedIn Scraper] Updating existing profile:", existingProfile.id);
+
+                // Build update object - only include fields that have meaningful new data
+                const updateData: any = {
+                    name: profile.name,
+                    headline: profile.headline || existingProfile.headline || '',
+                    location: profile.location || existingProfile.location || '',
+                    avatar: profile.profileImageUrl || existingProfile.avatar || null,  // Fix: profileImageUrl not avatar
+                    about: profile.about || existingProfile.about || null,
+                    skills: (profile.skills && profile.skills.length > 0) ? profile.skills : existingProfile.skills || [],
+                    company: profile.currentCompany || existingProfile.company || null,
+                };
+
+                // CRITICAL: Don't overwrite real email with fallback email
+                const isFallbackEmail = (email: string | null) => !email || email === 'technology@codescribed.com';
+                if (!isFallbackEmail(profile.email)) {
+                    // New profile has real email - use it
+                    updateData.email = profile.email;
+                } else if (!isFallbackEmail(existingProfile.email)) {
+                    // Existing profile has real email - keep it
+                    updateData.email = existingProfile.email;
+                } else {
+                    // Both are fallback - use null
+                    updateData.email = null;
+                }
+
+                await storage.updateScrapedProfile(req.user!.id, existingProfile.id, updateData);
+                console.log("[LinkedIn Scraper] ✅ Profile updated in archives");
+            } else {
+                console.log("[LinkedIn Scraper] Creating new archive entry");
+                // Create new archive entry
+                const isFallbackEmail = (email: string | null) => !email || email === 'technology@codescribed.com';
+                const savedProfile = await storage.createScrapedProfile(req.user!.id, {
+                    name: profile.name,
+                    headline: profile.headline || '',
+                    location: profile.location || '',
+                    url: profileUrl,
+                    email: isFallbackEmail(profile.email) ? null : profile.email,
+                    avatar: profile.profileImageUrl || null,  // Fix: profileImageUrl not avatar
+                    about: profile.about || null,
+                    skills: profile.skills || [],
+                    company: profile.currentCompany || null,
+                });
+                console.log("[LinkedIn Scraper] ✅ Profile saved to archives with ID:", savedProfile.id);
+            }
+        } catch (archiveError) {
+            console.error("[LinkedIn Scraper] ❌ Failed to save to archives:", archiveError);
+            console.error("[LinkedIn Scraper] Error details:", archiveError);
+            // Don't fail the request if archiving fails - still return the profile data
+        }
 
         console.log("[LinkedIn Scraper] Scraped profile:", profile);
         return res.json(profile);
@@ -235,7 +313,7 @@ router.post("/send-email", async (req, res) => {
         if (profile && to) {
             try {
                 // 1. Check if lead exists - use LinkedIn URL as unique identifier
-                const leads = await storage.getLeads();
+                const leads = await storage.getLeads(req.user!);
                 let lead = leads.find(l => l.linkedinUrl === profile.url);
 
                 // 2. If not found by URL, create new lead
@@ -297,9 +375,10 @@ router.post("/send-email", async (req, res) => {
 });
 
 // Get archived profiles
-router.get("/archives", async (req, res) => {
+router.post("/archives", async (req: Request, res: Response) => {
     try {
-        const profiles = await storage.getScrapedProfiles();
+        // Get scraped profiles (role-based access)
+        const profiles = await storage.getScrapedProfiles(req.user!);
         res.json(profiles);
     } catch (error: any) {
         console.error("Failed to fetch archives:", error);

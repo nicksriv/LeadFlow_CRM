@@ -26,6 +26,7 @@ interface ProfileResult {
     url: string;
     activity?: string;
     avatar?: string;
+    profileImageUrl?: string;  // Add this to fix TypeScript error
     email?: string;
     // Detailed fields from scraping
     about?: string;
@@ -51,10 +52,10 @@ export class LinkedInScraperService {
     /**
      * Perform LinkedIn people search using authenticated session
      */
-    async searchPeople(filters: SearchFilters): Promise<ProfileResult[]> {
+    async searchPeople(userId: string, filters: SearchFilters): Promise<ProfileResult[]> {
         try {
-            // Get stored cookies
-            const cookies = await linkedInAuthService.getCookies();
+            // Get LinkedIn session cookies for this specific user
+            const cookies = await linkedInAuthService.getCookies(userId);
             if (!cookies || cookies.length === 0) {
                 throw new Error("Not authenticated. Please connect your LinkedIn account first.");
             }
@@ -424,10 +425,22 @@ export class LinkedInScraperService {
                         summary = summaryEl.textContent?.trim() || '';
                     }
 
-                    // Attempt to extract current company from headline if possible (e.g. "Role at Company")
+                    // Attempt to extract current company from headline                    // Try to extract company from headline using multiple patterns
                     let currentCompany = '';
-                    if (headline.includes(' at ')) {
-                        currentCompany = headline.split(' at ').pop()?.trim() || '';
+                    if (headline) {
+                        // Try patterns: " at ", " AT ", " @ " (case-insensitive)
+                        const companyMatch = headline.match(/(?:^|\s)(?:at|AT|@)\s+(.+?)$/i);
+                        if (companyMatch && companyMatch[1]) {
+                            currentCompany = companyMatch[1].trim();
+                        } else {
+                            // Fallback: Try to extract company after common titles
+                            // E.g., "CEO Microsoft" or "VP Sales Goldman Sachs"
+                            const titlePattern = /(?:CEO|CTO|CFO|COO|VP|Vice President|Director|Manager|Head|Lead|Senior|Engineer|Developer|Designer|Analyst)\s+(?:of\s+)?(.+?)$/i;
+                            const titleMatch = headline.match(titlePattern);
+                            if (titleMatch && titleMatch[1]) {
+                                currentCompany = titleMatch[1].trim();
+                            }
+                        }
                     }
 
                     // Attempt to find experience/past roles in the summary or other list items
@@ -491,9 +504,10 @@ export class LinkedInScraperService {
     /**
      * Scrape individual profile with comprehensive data for email generation
      */
-    async scrapeProfile(url: string, profileName?: string): Promise<ProfileResult> {
+    async scrapeProfile(userId: string, url: string, profileName?: string): Promise<ProfileResult> {
         try {
-            const cookies = await linkedInAuthService.getCookies();
+            // Use stored cookies for this specific user
+            const cookies = await linkedInAuthService.getCookies(userId);
             if (!cookies || cookies.length === 0) {
                 throw new Error("Not authenticated. Please connect your LinkedIn account first.");
             }
@@ -968,6 +982,23 @@ export class LinkedInScraperService {
                     interestCount: interests.length,
                 };
 
+                // Extract company from headline
+                let currentCompany = '';
+                if (headline) {
+                    // Try patterns: " at ", " AT ", " @ " (case-insensitive)
+                    const companyMatch = headline.match(/(?:^|\s)(?:at|AT|@)\s+(.+?)$/i);
+                    if (companyMatch && companyMatch[1]) {
+                        currentCompany = companyMatch[1].trim();
+                    } else {
+                        // Fallback: Try to extract company after common titles
+                        const titlePattern = /(?:CEO|CTO|CFO|COO|VP|Vice President|Director|Manager|Head|Lead|Senior|Engineer|Developer|Designer|Analyst)\s+(?:of\s+)?(.+?)$/i;
+                        const titleMatch = headline.match(titlePattern);
+                        if (titleMatch && titleMatch[1]) {
+                            currentCompany = titleMatch[1].trim();
+                        }
+                    }
+                }
+
                 return {
                     name: name,
                     headline: headline,
@@ -978,6 +1009,7 @@ export class LinkedInScraperService {
                     posts: posts,
                     experiences: experiences,
                     interests: interests,
+                    currentCompany: currentCompany,  // Add company to return object
                     activityIndicators: {
                         hasRecentPosts: posts.length > 0,
                         postCount: posts.length,
@@ -1065,7 +1097,7 @@ export class LinkedInScraperService {
                     }
                 }
 
-                await storage.createScrapedProfile({
+                await storage.createScrapedProfile(userId, {
                     name: profile.name,
                     headline: profile.headline,
                     company: companyName,

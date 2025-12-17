@@ -18,9 +18,9 @@ export class LinkedInAuthService {
     /**
      * Login using credentials via headless browser automation
      */
-    async loginWithCredentials(email: string, password: string): Promise<{ success: boolean; requires2FA?: boolean; message: string }> {
+    async loginWithCredentials(userId: string, email: string, password: string): Promise<{ success: boolean; requires2FA?: boolean; message: string }> {
         try {
-            console.log("[LinkedIn Auth] Starting headless login automation...");
+            console.log(`[LinkedIn Auth] Starting headless login automation for user ${userId}...`);
 
             if (!email || !password) {
                 throw new Error("Email and password are required");
@@ -101,9 +101,9 @@ export class LinkedInAuthService {
                     throw new Error('Login appeared successful but session cookie (li_at) was not found.');
                 }
 
-                // Store cookies
-                await storage.storeLinkedInSession("default", cookies);
-                console.log("[LinkedIn Auth] Session saved successfully!");
+                // Store cookies with user's ID
+                await storage.storeLinkedInSession(userId, cookies);
+                console.log(`[LinkedIn Auth] Session saved successfully for user ${userId}!`);
 
                 await this.cleanup();
 
@@ -128,13 +128,13 @@ export class LinkedInAuthService {
     /**
      * Submit 2FA code to the active browser session
      */
-    async submit2FACode(code: string): Promise<{ success: boolean; message: string }> {
+    async submit2FACode(userId: string, code: string): Promise<{ success: boolean; message: string }> {
         try {
             if (!this.browser || !this.page) {
                 throw new Error("No active login session found. Please try logging in again.");
             }
 
-            console.log("[LinkedIn Auth] Submitting 2FA code...");
+            console.log(`[LinkedIn Auth] Submitting 2FA code for user ${userId}...`);
 
             // Try to find the input field. It varies.
             // Common IDs: input__phone_verification_pin, input__email_verification_pin
@@ -166,8 +166,8 @@ export class LinkedInAuthService {
                     throw new Error('2FA successful but session cookie (li_at) was not found.');
                 }
 
-                await storage.storeLinkedInSession("default", cookies);
-                console.log("[LinkedIn Auth] Session saved successfully!");
+                await storage.storeLinkedInSession(userId, cookies);
+                console.log(`[LinkedIn Auth] Session saved successfully for user ${userId}!`);
 
                 await this.cleanup();
 
@@ -192,18 +192,18 @@ export class LinkedInAuthService {
     /**
      * Check if user has valid LinkedIn session
      */
-    async checkStatus(): Promise<{
+    async checkStatus(userId: string): Promise<{
         connected: boolean;
         expiresAt?: Date;
         lastUsedAt?: Date;
     }> {
-        const isValid = await storage.isSessionValid();
-        if (!isValid) {
+        const session = await storage.getLinkedInSession(userId);
+        if (!session) {
             return { connected: false };
         }
 
-        const session = await storage.getLinkedInSession();
-        if (!session) {
+        const isValid = await storage.isSessionValid(userId);
+        if (!isValid) {
             return { connected: false };
         }
 
@@ -217,16 +217,16 @@ export class LinkedInAuthService {
     /**
      * Logout - clear stored session
      */
-    async logout(): Promise<void> {
-        await storage.deleteLinkedInSession();
-        console.log("[LinkedIn Auth] Session cleared");
+    async logout(userId: string): Promise<void> {
+        await storage.deleteLinkedInSession(userId);
+        console.log(`[LinkedIn Auth] Session cleared for user ${userId}`);
     }
 
     /**
      * Get stored cookies for use in scraping
      */
-    async getCookies(): Promise<Cookie[] | null> {
-        const session = await storage.getLinkedInSession();
+    async getCookies(userId: string): Promise<Cookie[] | null> {
+        const session = await storage.getLinkedInSession(userId);
         if (!session || !session.cookies) {
             return null;
         }

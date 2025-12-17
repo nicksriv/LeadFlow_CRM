@@ -13,10 +13,10 @@ export class ApolloEnrichmentService {
     /**
      * Enrich a scraped profile with email from Apollo.io
      */
-    async enrichScrapedProfile(profileId: string): Promise<{ success: boolean; email?: string; message: string }> {
+    async enrichScrapedProfile(user: { id: string; role: string }, profileId: string): Promise<{ success: boolean; email?: string; message: string }> {
         try {
-            // Get the scraped profile
-            const profiles = await storage.getScrapedProfiles();
+            // Get the scraped profile (role-based access)
+            const profiles = await storage.getScrapedProfiles(user);
             const profile = profiles.find(p => p.id === profileId);
 
             if (!profile) {
@@ -49,8 +49,8 @@ export class ApolloEnrichmentService {
 
             console.log(`[Apollo Enrichment] Found email: ${matchedPerson.email}`);
 
-            // Update scraped profile
-            await storage.updateScrapedProfile(profileId, { email: matchedPerson.email });
+            // Update scraped profile (only for this user)
+            await storage.updateScrapedProfile(user.id, profileId, { email: matchedPerson.email });
 
             // Update lead if exists
             await this.updateLeadEmail(profile.name, matchedPerson.email);

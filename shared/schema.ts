@@ -114,6 +114,7 @@ export const activities = pgTable("activities", {
 // MS 365 sync state
 export const syncState = pgTable("sync_state", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // Per-user MS365 tokens (nullable for migration)
   lastSyncAt: timestamp("last_sync_at"),
   deltaToken: text("delta_token"), // For incremental sync
   isConfigured: integer("is_configured").notNull().default(0), // 0 or 1
@@ -153,7 +154,7 @@ export const saleshandySequences = pgTable("saleshandy_sequences", {
 // LinkedIn authentication sessions
 export const linkedInSessions = pgTable("linkedin_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().default("default"), // For multi-user support later
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // For multi-user support (nullable for migration)
   cookies: jsonb("cookies").notNull(), // Encrypted LinkedIn cookies
   isValid: integer("is_valid").notNull().default(1), // 0 or 1
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -172,14 +173,23 @@ export const emailTemplates = pgTable("email_templates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Users/Team members for assignment
+// Users/Team members for assignment and authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
+  passwordHash: text("password_hash"), // For authentication
   role: text("role").notNull().default("sales_rep"), // admin, sales_manager, sales_rep
   managerId: varchar("manager_id"), // Reporting manager for hierarchy - reference added in relations
   isActive: integer("is_active").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Authentication sessions
+export const sessions = pgTable("sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -367,6 +377,14 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   ownedLeads: many(leads),
   assignedTasks: many(tasks),
+  sessions: many(sessions),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
 }));
 
 export const leadAssignmentsRelations = relations(leadAssignments, ({ one }) => ({
@@ -634,11 +652,12 @@ export type InsertSnovioLog = z.infer<typeof insertSnovioLogSchema>;
 // Scraped profiles archive
 export const scrapedProfiles = pgTable("scraped_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // Owner of this profile (nullable for migration)
   name: text("name").notNull(),
   headline: text("headline"),
   company: text("company"), // Extracted company name
   location: text("location"),
-  url: text("url").notNull().unique(), // LinkedIn URL
+  url: text("url").notNull(), // LinkedIn URL (removed unique constraint to allow multiple users to scrape same profile)
   email: text("email"),
   emailConfidence: integer("email_confidence"), // Match confidence (0-100)
   avatar: text("avatar"),

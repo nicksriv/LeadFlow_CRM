@@ -4,8 +4,12 @@ import { DatagmaService } from "../services/datagma.js";
 import { ApifyEnrichmentService } from "../services/apify-enrichment.js";
 import { apolloEnrichmentService } from "../services/apollo-enrichment.js";
 import { hunterEnrichmentService } from "../services/hunter-enrichment.js";
+import AuthService from "../auth.js";
 
 const router = Router();
+
+// Protect all enrichment routes with authentication
+router.use(AuthService.requireAuth);
 
 // Initialize Datagma service
 const datagmaService = new DatagmaService();
@@ -18,8 +22,8 @@ router.post("/fullenrich/search", async (req, res) => {
 
         console.log('[Datagma Route] Enriching profile:', profileId);
 
-        // Get profile from database
-        const profiles = await storage.getScrapedProfiles();
+        // Get profile from database (role-based access)
+        const profiles = await storage.getScrapedProfiles(req.user!);
         const profile = profiles.find(p => p.id === profileId);
 
         if (!profile) {
@@ -39,8 +43,8 @@ router.post("/fullenrich/search", async (req, res) => {
 
         console.log(`[Datagma Route] Using email: ${finalEmail} (source: ${emailSource})`);
 
-        // Update profile with email
-        await storage.updateScrapedProfile(profileId, {
+        // Update profile with email (only if owned by this user)
+        await storage.updateScrapedProfile(req.user!.id, profileId, {
             email: finalEmail,
             emailConfidence: email ? 95 : 50 // Lower confidence for fallback emails
         });
@@ -49,7 +53,7 @@ router.post("/fullenrich/search", async (req, res) => {
 
         // Also update or create lead if profile has name
         if (profile.name) {
-            const leads = await storage.getLeads();
+            const leads = await storage.getLeads(req.user!);
             let lead = leads.find(l => l.email === finalEmail || l.linkedinUrl === profile.url);
 
             if (lead) {
@@ -126,16 +130,16 @@ router.post("/apify/bulk-enrich", async (req, res) => {
 
         console.log(`[Apify Route] Saved ${savedCount}/${apifyLeads.length} leads to database`);
 
-        // Get scraped profiles without emails
-        const profiles = await storage.getScrapedProfiles();
+        // Get scraped profiles without emails (role-based access)
+        const profiles = await storage.getScrapedProfiles(req.user!);
         const profilesWithoutEmail = profiles.filter(p => !p.email);
 
         // Match profiles
         const matches = apifyEnrichmentService.matchProfiles(apifyLeads, profilesWithoutEmail);
 
-        // Update profiles with emails and confidence scores
+        // Update profiles with emails and confidence scores (only user's profiles)
         for (const match of matches) {
-            await storage.updateScrapedProfile(match.profileId, {
+            await storage.updateScrapedProfile(req.user!.id, match.profileId, {
                 email: match.email,
                 emailConfidence: match.confidence
             });
@@ -175,7 +179,7 @@ router.post("/apollo/enrich-profile", async (req, res) => {
             return res.status(400).json({ success: false, message: "Profile ID is required" });
         }
 
-        const result = await apolloEnrichmentService.enrichScrapedProfile(profileId);
+        const result = await apolloEnrichmentService.enrichScrapedProfile(req.user!, profileId);
 
         if (result.success) {
             return res.json(result);
@@ -197,7 +201,7 @@ router.post("/hunter/enrich-profile", async (req, res) => {
             return res.status(400).json({ success: false, message: "Profile URL is required" });
         }
 
-        const result = await hunterEnrichmentService.enrichScrapedProfile(profileUrl);
+        const result = await hunterEnrichmentService.enrichScrapedProfile(req.user!, profileUrl);
 
         if (result.success) {
             return res.json(result);

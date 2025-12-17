@@ -39,6 +39,10 @@ export function ArchivesTable() {
 
     const { data: archives } = useQuery<ScrapedProfile[]>({
         queryKey: ["/api/linkedin/archives"],
+        queryFn: async () => {
+            const res = await apiRequest("POST", "/api/linkedin/archives", {});
+            return res.json();
+        },
     });
 
     const enrichEmailMutation = useMutation({
@@ -262,6 +266,7 @@ export function ArchivesTable() {
                             <TableHead>Profile</TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead>Email</TableHead>
+                            <TableHead>Last Updated</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -357,22 +362,25 @@ export function ArchivesTable() {
                                                 <span className="text-muted-foreground text-sm">-</span>
                                             )}
                                         </TableCell>
+                                        <TableCell>
+                                            <span className="text-sm text-muted-foreground">
+                                                {new Date(profile.scrapedAt).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })}
+                                            </span>
+                                        </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                            {!profile.email && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => enrichEmailMutation.mutate(profile.id)}
-                                                    disabled={enrichingProfileId === profile.id}
-                                                >
-                                                    {enrichingProfileId === profile.id ? (
-                                                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                                    ) : (
-                                                        <Sparkles className="h-3 w-3 mr-1" />
-                                                    )}
-                                                    Enrich
-                                                </Button>
-                                            )}
+                                            <a
+                                                href={profile.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-primary hover:underline flex items-center justify-end gap-1"
+                                            >
+                                                <Linkedin className="h-3 w-3" />
+                                                View Profile
+                                            </a>
                                         </TableCell>
                                     </TableRow>
 
@@ -447,7 +455,7 @@ export function ArchivesTable() {
                         })}
                         {filteredArchives.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                     {searchQuery ? "No profiles found matching your search." : "No profiles archived yet."}
                                 </TableCell>
                             </TableRow>

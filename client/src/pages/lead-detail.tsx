@@ -141,7 +141,8 @@ export default function LeadDetail() {
     );
   }
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined) => {
+    if (!name) return "??";
     return name
       .split(" ")
       .map((n) => n[0])
@@ -552,9 +553,12 @@ export default function LeadDetail() {
                               {conv.isFromLead ? "Received" : "Sent"}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(conv.sentAt), {
-                                addSuffix: true,
-                              })}
+                              {conv.sentAt && !isNaN(new Date(conv.sentAt).getTime())
+                                ? formatDistanceToNow(new Date(conv.sentAt), {
+                                  addSuffix: true,
+                                })
+                                : 'Date unknown'
+                              }
                             </span>
                           </div>
                         </div>
@@ -598,8 +602,8 @@ export default function LeadDetail() {
                                   task.priority === "urgent"
                                     ? "destructive"
                                     : task.priority === "high"
-                                    ? "default"
-                                    : "secondary"
+                                      ? "default"
+                                      : "secondary"
                                 }
                               >
                                 {task.priority}
@@ -670,8 +674,8 @@ export default function LeadDetail() {
                           <div className="flex items-center gap-2 mb-2">
                             <Badge variant={
                               nextBestAction.priority === "high" ? "destructive" :
-                              nextBestAction.priority === "medium" ? "default" :
-                              "secondary"
+                                nextBestAction.priority === "medium" ? "default" :
+                                  "secondary"
                             }>
                               {nextBestAction.priority} priority
                             </Badge>
@@ -726,7 +730,7 @@ export default function LeadDetail() {
                       <CardContent className="space-y-4">
                         <div>
                           <p className="text-sm mb-3">{conversationSummary.summary}</p>
-                          
+
                           {conversationSummary.keyPoints.length > 0 && (
                             <div className="mb-3">
                               <h4 className="text-sm font-medium mb-2">Key Points:</h4>
@@ -752,8 +756,8 @@ export default function LeadDetail() {
                           <div className="flex items-center gap-2 pt-2 border-t">
                             <Badge variant={
                               conversationSummary.sentiment === "positive" ? "default" :
-                              conversationSummary.sentiment === "negative" ? "destructive" :
-                              "secondary"
+                                conversationSummary.sentiment === "negative" ? "destructive" :
+                                  "secondary"
                             }>
                               {conversationSummary.sentiment} sentiment
                             </Badge>
@@ -800,18 +804,17 @@ export default function LeadDetail() {
                         <div className="space-y-3">
                           {sentimentTimeline.map((point, idx) => (
                             <div key={idx} className="flex gap-3 pb-3 border-b last:border-0">
-                              <div className={`w-2 h-2 rounded-full mt-2 ${
-                                point.sentiment === "positive" ? "bg-success" :
+                              <div className={`w-2 h-2 rounded-full mt-2 ${point.sentiment === "positive" ? "bg-success" :
                                 point.sentiment === "negative" ? "bg-destructive" :
-                                "bg-muted-foreground"
-                              }`} />
+                                  "bg-muted-foreground"
+                                }`} />
                               <div className="flex-1">
                                 <div className="flex items-center justify-between mb-1">
                                   <p className="text-sm font-medium">{point.conversationSubject}</p>
                                   <Badge variant={
                                     point.sentiment === "positive" ? "default" :
-                                    point.sentiment === "negative" ? "destructive" :
-                                    "secondary"
+                                      point.sentiment === "negative" ? "destructive" :
+                                        "secondary"
                                   } className="text-xs">
                                     {point.score > 0 ? "+" : ""}{point.score}
                                   </Badge>
@@ -924,7 +927,7 @@ function ConvertToDealDialog({
 }) {
   const { toast } = useToast();
   const defaultPipeline = pipelines.find(p => p.isDefault === 1) || pipelines[0];
-  
+
   const { data: stages = [] } = useQuery<PipelineStage[]>({
     queryKey: [`/api/pipelines/${defaultPipeline?.id}/stages`],
     enabled: !!defaultPipeline?.id && open,
@@ -954,7 +957,7 @@ function ConvertToDealDialog({
       return response.json();
     },
     onSuccess: (deal) => {
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey[0];
           return typeof key === 'string' && key.startsWith('/api/deals');

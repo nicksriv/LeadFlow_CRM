@@ -30,14 +30,14 @@ export class HunterEnrichmentService {
     /**
      * Enrich a scraped profile with email from Hunter.io
      */
-    async enrichScrapedProfile(profileUrl: string): Promise<{ success: boolean; email?: string; confidence?: number; message: string }> {
+    async enrichScrapedProfile(user: User, profileUrl: string): Promise<{ success: boolean; email?: string; confidence?: number; message: string }> {
         try {
             if (!this.apiKey) {
                 return { success: false, message: 'Hunter.io API key not configured' };
             }
 
-            // Get the scraped profile by URL
-            const profiles = await storage.getScrapedProfiles();
+            // Get the scraped profile by URL (role-based access)
+            const profiles = await storage.getScrapedProfiles(user);
             const profile = profiles.find(p => p.url === profileUrl);
 
             if (!profile) {
@@ -109,9 +109,9 @@ export class HunterEnrichmentService {
                 finalEmail = `${existingEmail}, ${result.email}`;
             }
 
-            // Update scraped profile
-            await storage.updateScrapedProfile(profile.id, {
-                email: finalEmail,
+            // Update profile with email
+            await storage.updateScrapedProfile(user.id, profile.id, {
+                email: result.email,
                 emailConfidence: result.score
             });
 

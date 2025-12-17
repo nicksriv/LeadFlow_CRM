@@ -68,19 +68,19 @@ import {
   type InsertSnovioLog,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte, or, sql } from "drizzle-orm";
+import { eq, desc, ilike, and, or, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
-  // Leads
-  getLeads(): Promise<Lead[]>;
-  getLead(id: string): Promise<Lead | undefined>;
+  // Leads - Role-based access
+  getLeads(user: { id: string; role: string }): Promise<Lead[]>;
+  getLead(user: { id: string; role: string }, id: string): Promise<Lead | undefined>;
   getLeadsByOwner(ownerId: string): Promise<Lead[]>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<void>;
 
   // Conversations
-  getConversations(): Promise<Conversation[]>;
+  getConversations(user: AuthUser): Promise<Conversation[]>;
   getConversationsByLeadId(leadId: string): Promise<Conversation[]>;
   createConversation(conversation: InsertConversation): Promise<Conversation>;
 
@@ -94,7 +94,7 @@ export interface IStorage {
 
   // Sync State
   getSyncState(): Promise<SyncState | undefined>;
-  updateSyncState(state: Partial<InsertSyncState>): Promise<SyncState>;
+  updateSyncState(data: Partial<SyncState>): Promise<SyncState>;
 
   // Email Templates
   getEmailTemplates(): Promise<EmailTemplate[]>;
@@ -149,8 +149,8 @@ export interface IStorage {
   deleteStage(id: string): Promise<void>;
   reorderStages(stageIds: string[]): Promise<void>;
 
-  // Deals
-  getDeals(filters?: {
+  // Deals - Role-based access
+  getDeals(user: { id: string; role: string }, filters?: {
     pipelineId?: string;
     stageId?: string;
     ownerId?: string;
@@ -160,7 +160,7 @@ export interface IStorage {
     fromDate?: Date;
     toDate?: Date;
   }): Promise<Deal[]>;
-  getDeal(id: string): Promise<Deal | undefined>;
+  getDeal(user: { id: string; role: string }, id: string): Promise<Deal | undefined>;
   createDeal(deal: InsertDeal): Promise<Deal>;
   updateDeal(id: string, deal: Partial<InsertDeal>): Promise<Deal | undefined>;
   deleteDeal(id: string): Promise<void>;
@@ -196,10 +196,10 @@ export interface IStorage {
   deleteLinkedInSession(userId?: string): Promise<void>;
   isSessionValid(userId?: string): Promise<boolean>;
 
-  // Scraped Profiles (Archives)
-  createScrapedProfile(profile: InsertScrapedProfile): Promise<ScrapedProfile>;
-  getScrapedProfiles(): Promise<ScrapedProfile[]>;
-  updateScrapedProfile(id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined>;
+  // Scraped Profiles (Archives) - Role-based access
+  createScrapedProfile(userId: string, profile: InsertScrapedProfile): Promise<ScrapedProfile>;
+  getScrapedProfiles(user: { id: string; role: string }): Promise<ScrapedProfile[]>;
+  updateScrapedProfile(userId: string, id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined>;
 
   // Apify Results
   createApifyResult(result: any): Promise<any>;
@@ -215,12 +215,31 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getLeads(): Promise<Lead[]> {
-    return db.select().from(leads).orderBy(desc(leads.createdAt));
+  async getLeads(user: { id: string; role: string }): Promise<Lead[]> {
+    // Import PermissionService to get accessible user IDs
+    const { default: PermissionService } = await import("./permissions.js");
+    const accessibleUserIds = await PermissionService.getAccessibleUserIds(user as any);
+
+    // Filter leads by accessible owner IDs (role-based)
+    return db
+      .select()
+      .from(leads)
+      .where(sql`${leads.ownerId} IN (${sql.join(accessibleUserIds.map(id => sql`${id}`), sql`, `)})`)
+      .orderBy(desc(leads.createdAt));
   }
 
-  async getLead(id: string): Promise<Lead | undefined> {
-    const [lead] = await db.select().from(leads).where(eq(leads.id, id));
+  async getLead(user: { id: string; role: string }, id: string): Promise<Lead | undefined> {
+    // Import PermissionService to check access
+    const { default: PermissionService } = await import("./permissions.js");
+    const accessibleUserIds = await PermissionService.getAccessibleUserIds(user as any);
+
+    const [lead] = await db
+      .select()
+      .from(leads)
+      .where(and(
+        eq(leads.id, id),
+        sql`${leads.ownerId} IN (${sql.join(accessibleUserIds.map(id => sql`${id}`), sql`, `)})`
+      ));
     return lead || undefined;
   }
 
@@ -230,11 +249,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLead(id: string, updates: Partial<InsertLead>): Promise<Lead | undefined> {
+    console.log(`[Storage.updateLead] Called with id: ${id}, updates:`, updates);
     const [lead] = await db
       .update(leads)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(leads.id, id))
       .returning();
+    console.log(`[Storage.updateLead] Result for id ${id}:`, lead);
     return lead || undefined;
   }
 
@@ -246,8 +267,21 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(leads).where(eq(leads.ownerId, ownerId)).orderBy(desc(leads.createdAt));
   }
 
-  async getConversations(): Promise<Conversation[]> {
-    return db.select().from(conversations).orderBy(desc(conversations.sentAt));
+  async getConversations(user: AuthUser): Promise<Conversation[]> {
+    // Get all leads accessible by this user
+    const accessibleLeads = await this.getLeads(user);
+    const accessibleLeadIds = accessibleLeads.map(l => l.id);
+
+    // Filter conversations to only show ones for accessible leads
+    if (accessibleLeadIds.length === 0) {
+      return [];
+    }
+
+    return db
+      .select()
+      .from(conversations)
+      .where(inArray(conversations.leadId, accessibleLeadIds))
+      .orderBy(desc(conversations.sentAt));
   }
 
   async getConversationsByLeadId(leadId: string): Promise<Conversation[]> {
@@ -296,23 +330,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSyncState(): Promise<SyncState | undefined> {
-    const [state] = await db.select().from(syncState).limit(1);
-    return state || undefined;
+    // Get first sync state record (system-wide MS365 configuration)
+    const results = await db.select().from(syncState).limit(1);
+    return results[0];
   }
 
-  async updateSyncState(updates: Partial<InsertSyncState>): Promise<SyncState> {
+  async updateSyncState(data: Partial<SyncState>): Promise<SyncState> {
     const existing = await this.getSyncState();
     if (existing) {
-      const [state] = await db
+      // Update existing record
+      const updated = await db
         .update(syncState)
-        .set(updates)
+        .set(data)
         .where(eq(syncState.id, existing.id))
         .returning();
-      return state;
-    } else {
-      const [state] = await db.insert(syncState).values(updates).returning();
-      return state;
+      return updated[0];
     }
+    // Create new record
+    const created = await db.insert(syncState).values(data).returning();
+    return created[0];
   }
 
   async getEmailTemplates(): Promise<EmailTemplate[]> {
@@ -544,7 +580,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Deals
-  async getDeals(filters?: {
+  async getDeals(user: { id: string; role: string }, filters?: {
     pipelineId?: string;
     stageId?: string;
     ownerId?: string;
@@ -554,7 +590,15 @@ export class DatabaseStorage implements IStorage {
     fromDate?: Date;
     toDate?: Date;
   }): Promise<Deal[]> {
-    const conditions = [];
+    // Import PermissionService to get accessible user IDs
+    const { default: PermissionService } = await import("./permissions.js");
+    const accessibleUserIds = await PermissionService.getAccessibleUserIds(user as any);
+
+    const conditions = [
+      // Always filter by accessible users
+      sql`${deals.ownerId} IN (${sql.join(accessibleUserIds.map(id => sql`${id}`), sql`, `)})`
+    ];
+
     if (filters?.pipelineId) {
       conditions.push(eq(deals.pipelineId, filters.pipelineId));
     }
@@ -562,6 +606,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(deals.stageId, filters.stageId));
     }
     if (filters?.ownerId) {
+      // Additional owner filter (must still be in accessible users)
       conditions.push(eq(deals.ownerId, filters.ownerId));
     }
     if (filters?.status) {
@@ -580,15 +625,21 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(deals.expectedCloseDate, filters.toDate));
     }
 
-    if (conditions.length > 0) {
-      return db.select().from(deals).where(and(...conditions)).orderBy(desc(deals.createdAt));
-    }
-
-    return db.select().from(deals).orderBy(desc(deals.createdAt));
+    return db.select().from(deals).where(and(...conditions)).orderBy(desc(deals.createdAt));
   }
 
-  async getDeal(id: string): Promise<Deal | undefined> {
-    const [deal] = await db.select().from(deals).where(eq(deals.id, id));
+  async getDeal(user: { id: string; role: string }, id: string): Promise<Deal | undefined> {
+    // Import PermissionService to check access
+    const { default: PermissionService } = await import("./permissions.js");
+    const accessibleUserIds = await PermissionService.getAccessibleUserIds(user as any);
+
+    const [deal] = await db
+      .select()
+      .from(deals)
+      .where(and(
+        eq(deals.id, id),
+        sql`${deals.ownerId} IN (${sql.join(accessibleUserIds.map(id => sql`${id}`), sql`, `)})`
+      ));
     return deal || undefined;
   }
 
@@ -817,38 +868,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Scraped Profiles
-  async createScrapedProfile(insertProfile: InsertScrapedProfile): Promise<ScrapedProfile> {
+  async createScrapedProfile(userId: string, insertProfile: InsertScrapedProfile): Promise<ScrapedProfile> {
     const [profile] = await db
       .insert(scrapedProfiles)
-      .values(insertProfile)
-      .onConflictDoUpdate({
-        target: scrapedProfiles.url,
-        set: {
-          name: insertProfile.name,
-          headline: insertProfile.headline,
-          company: insertProfile.company,
-          location: insertProfile.location,
-          email: insertProfile.email,
-          emailConfidence: insertProfile.emailConfidence,
-          avatar: insertProfile.avatar,
-          about: insertProfile.about,
-          skills: insertProfile.skills,
-          scrapedAt: new Date(),
-        },
-      })
+      .values({ ...insertProfile, userId }) // Add userId to the profile
       .returning();
     return profile;
   }
 
-  async getScrapedProfiles(): Promise<ScrapedProfile[]> {
-    return db.select().from(scrapedProfiles).orderBy(desc(scrapedProfiles.scrapedAt));
+  async getScrapedProfiles(user: { id: string; role: string }): Promise<ScrapedProfile[]> {
+    // Import PermissionService to get accessible user IDs
+    const { default: PermissionService } = await import("./permissions.js");
+    const accessibleUserIds = await PermissionService.getAccessibleUserIds(user as any);
+
+    // Filter profiles by accessible user IDs (role-based)
+    return db
+      .select()
+      .from(scrapedProfiles)
+      .where(sql`${scrapedProfiles.userId} IN (${sql.join(accessibleUserIds.map(id => sql`${id}`), sql`, `)})`)
+      .orderBy(desc(scrapedProfiles.scrapedAt));
   }
 
-  async updateScrapedProfile(id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined> {
+  async updateScrapedProfile(userId: string, id: string, updates: Partial<InsertScrapedProfile>): Promise<ScrapedProfile | undefined> {
     const [profile] = await db
       .update(scrapedProfiles)
       .set(updates)
-      .where(eq(scrapedProfiles.id, id))
+      .where(and(
+        eq(scrapedProfiles.id, id),
+        eq(scrapedProfiles.userId, userId) // Only update if owned by this user
+      ))
       .returning();
     return profile || undefined;
   }
@@ -873,77 +921,7 @@ export class DatabaseStorage implements IStorage {
     return log;
   }
 
-  // LinkedIn Sessions
-  async storeLinkedInSession(sessionId: string, cookies: any[]): Promise<LinkedInSession> {
-    // Extract li_at cookie to determine expiry
-    const liAtCookie = cookies.find((c: any) => c.name === 'li_at');
-    const expiresAt = liAtCookie?.expires
-      ? new Date(liAtCookie.expires * 1000)
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days default
 
-    console.log('[Storage] Storing LinkedIn session:', { sessionId, cookieCount: cookies.length, expiresAt });
-
-    // Upsert session
-    const [session] = await db
-      .insert(linkedInSessions)
-      .values({
-        id: sessionId,
-        userId: "default",
-        cookies: cookies as any,
-        expiresAt: expiresAt,
-        createdAt: new Date(),
-        isValid: 1,
-      })
-      .onConflictDoUpdate({
-        target: linkedInSessions.id,
-        set: {
-          cookies: cookies as any,
-          expiresAt: expiresAt,
-          isValid: 1,
-        },
-      })
-      .returning();
-
-    console.log('[Storage] LinkedIn session stored successfully');
-    return session;
-  }
-
-  async getLinkedInSession(sessionId: string = "default"): Promise<LinkedInSession | null> {
-    const [session] = await db
-      .select()
-      .from(linkedInSessions)
-      .where(eq(linkedInSessions.id, sessionId));
-
-    if (!session) {
-      console.log('[Storage] No LinkedIn session found for ID:', sessionId);
-      return null;
-    }
-
-    // Check if expired
-    if (new Date(session.expiresAt) < new Date()) {
-      console.log('[Storage] LinkedIn session expired');
-      return null;
-    }
-
-    // Update last used timestamp
-    await db
-      .update(linkedInSessions)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(linkedInSessions.id, sessionId));
-
-    console.log('[Storage] LinkedIn session retrieved successfully');
-    return session;
-  }
-
-  async isSessionValid(sessionId: string = "default"): Promise<boolean> {
-    const session = await this.getLinkedInSession(sessionId);
-    return session !== null && session.isValid === 1;
-  }
-
-  async deleteLinkedInSession(sessionId: string = "default"): Promise<void> {
-    console.log('[Storage] Deleting LinkedIn session:', sessionId);
-    await db.delete(linkedInSessions).where(eq(linkedInSessions.id, sessionId));
-  }
 }
 
 export const storage = new DatabaseStorage();

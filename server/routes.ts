@@ -19,21 +19,38 @@ import { analyzeLeadConversations, summarizeConversations, draftEmailResponse, g
 import { ms365Integration } from "./ms365";
 import { automationEngine } from "./automation";
 import enrichmentRouter from "./routes/enrichment";
+import authRouter from "./routes/auth";
+import ms365Router from "./routes/ms365";
+import AuthService from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Lead routes
-  app.get("/api/leads", async (req, res) => {
+  // Auth routes (public) - must be registered first
+  app.use("/api/auth", authRouter);
+
+  // MS365 routes (protected)
+  app.use("/api/ms365", ms365Router);
+
+  // LinkedIn routes (protected)
+  const { default: linkedinRouter } = await import("./routes/linkedin.js");
+  const { default: linkedinAuthRouter } = await import("./routes/linkedin-auth.js");
+  app.use("/api/linkedin", linkedinRouter);
+  app.use("/api/linkedin/auth", linkedinAuthRouter);
+
+  // Lead routes - with auth middleware applied directly
+  app.get("/api/leads", AuthService.requireAuth, async (req, res) => {
     try {
-      const allLeads = await storage.getLeads();
+      console.log(`[/api/leads] User:`, req.user);
+      const allLeads = await storage.getLeads(req.user!);
       res.json(allLeads);
     } catch (error: any) {
+      console.error(`[/api/leads] Error:`, error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.get("/api/leads/:id", async (req, res) => {
+  app.get("/api/leads/:id", AuthService.requireAuth, async (req, res) => {
     try {
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.user!, req.params.id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -133,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Check for duplicate by email
           if (leadData.email) {
-            const existingLeads = await storage.getLeads();
+            const existingLeads = await storage.getLeads(req.user!);
             const duplicate = existingLeads.find(l => l.email === leadData.email);
 
             if (duplicate) {
@@ -257,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Check for duplicate by email
           if (leadData.email) {
-            const existingLeads = await storage.getLeads();
+            const existingLeads = await storage.getLeads(req.user!);
             const duplicate = existingLeads.find(l => l.email === leadData.email);
 
             if (duplicate) {
@@ -371,23 +388,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
   // Conversation routes
-  app.get("/api/conversations", async (req, res) => {
+  app.get("/api/conversations", AuthService.requireAuth, async (req, res) => {
     try {
-      const allConversations = await storage.getConversations();
+      // Get conversations with proper multi-tenancy filtering
+      const allConversations = await storage.getConversations(req.user!);
       const conversationsWithLeads = await Promise.all(
         allConversations.map(async (conv) => {
-          const lead = await storage.getLead(conv.leadId);
+          const lead = await storage.getLead(req.user!, conv.leadId);
           return { ...conv, lead };
         })
       );
       res.json(conversationsWithLeads);
     } catch (error: any) {
+      console.error("[/api/conversations] Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.get("/api/leads/:id/conversations", async (req, res) => {
+  app.get("/api/leads/:id/conversations", AuthService.requireAuth, async (req, res) => {
     try {
       const convs = await storage.getConversationsByLeadId(req.params.id);
       res.json(convs);
@@ -401,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertConversationSchema.parse(req.body);
       const conversation = await storage.createConversation(validatedData);
 
-      const lead = await storage.getLead(conversation.leadId);
+      const lead = await storage.getLead(req.user!, conversation.leadId);
       if (lead) {
         await storage.updateLead(lead.id, {
           lastContactedAt: conversation.sentAt,
@@ -495,7 +515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Email Drafting
   app.post("/api/leads/:id/draft-email", async (req, res) => {
     try {
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.user!, req.params.id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -528,7 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Next Best Action
   app.get("/api/leads/:id/next-best-action", async (req, res) => {
     try {
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.user!, req.params.id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -573,7 +593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Sentiment Timeline
   app.get("/api/leads/:id/sentiment-timeline", async (req, res) => {
     try {
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.user!, req.params.id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -596,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Activity routes
-  app.get("/api/leads/:id/activities", async (req, res) => {
+  app.get("/api/leads/:id/activities", AuthService.requireAuth, async (req, res) => {
     try {
       const acts = await storage.getActivities(req.params.id);
       res.json(acts);
@@ -605,10 +625,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stats route
-  app.get("/api/stats", async (req, res) => {
+  // Stats route - with auth middleware
+  app.get("/api/stats", AuthService.requireAuth, async (req, res) => {
     try {
-      const allLeads = await storage.getLeads();
+      const allLeads = await storage.getLeads(req.user!);
       const allConversations = await storage.getConversations();
 
       const hotLeads = allLeads.filter((l) => l.status === "hot").length;
@@ -790,7 +810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Body is required" });
       }
 
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.user!, req.params.id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -987,7 +1007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/leads/:id/tasks", async (req, res) => {
+  app.get("/api/leads/:id/tasks", AuthService.requireAuth, async (req, res) => {
     try {
       const tasks = await storage.getTasks(req.params.id);
       res.json(tasks);
@@ -1166,7 +1186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/pipelines/:id", async (req, res) => {
     try {
       // Check for dependent deals
-      const deals = await storage.getDeals({ pipelineId: req.params.id });
+      const deals = await storage.getDeals(req.user!, { pipelineId: req.params.id });
       if (deals.length > 0) {
         return res.status(400).json({
           error: `Cannot delete pipeline with ${deals.length} active deal(s). Please reassign or delete the deals first.`
@@ -1227,7 +1247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/stages/:id", async (req, res) => {
     try {
       // Check for dependent deals
-      const deals = await storage.getDeals({ stageId: req.params.id });
+      const deals = await storage.getDeals(req.user!, { stageId: req.params.id });
       if (deals.length > 0) {
         return res.status(400).json({
           error: `Cannot delete stage with ${deals.length} active deal(s). Please move the deals to another stage first.`
@@ -1267,7 +1287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.query.fromDate) filters.fromDate = new Date(req.query.fromDate as string);
       if (req.query.toDate) filters.toDate = new Date(req.query.toDate as string);
 
-      const deals = await storage.getDeals(filters);
+      const deals = await storage.getDeals(req.user!, filters);
       res.json(deals);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1276,7 +1296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/deals/:id", async (req, res) => {
     try {
-      const deal = await storage.getDeal(req.params.id);
+      const deal = await storage.getDeal(req.user!, req.params.id);
       if (!deal) {
         return res.status(404).json({ error: "Deal not found" });
       }
@@ -1378,7 +1398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Deal Outcome Prediction
   app.get("/api/deals/:id/forecast", async (req, res) => {
     try {
-      const deal = await storage.getDeal(req.params.id);
+      const deal = await storage.getDeal(req.user!, req.params.id);
       if (!deal) {
         return res.status(404).json({ error: "Deal not found" });
       }
@@ -1469,7 +1489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pipelineId = req.query.pipelineId as string | undefined;
       const ownerId = req.query.ownerId as string | undefined;
 
-      const deals = await storage.getDeals({
+      const deals = await storage.getDeals(req.user!, {
         pipelineId,
         ownerId,
         status: "open",
@@ -1586,14 +1606,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: error.message });
     }
   });
-
-  // LinkedIn Outreach Routes
-  const { default: linkedinRouter } = await import("./routes/linkedin");
-  app.use("/api/linkedin", linkedinRouter);
-
-  // LinkedIn Authentication Routes
-  const { default: linkedinAuthRouter } = await import("./routes/linkedin-auth");
-  app.use("/api/linkedin/auth", linkedinAuthRouter);
 
   // Enrichment Routes
   app.use("/api/enrichment", enrichmentRouter);

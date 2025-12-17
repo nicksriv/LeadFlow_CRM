@@ -21,7 +21,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 
 const menuItems = [
   {
@@ -78,15 +78,10 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { logout, user: currentUser } = useAuth();
 
-  // Fetch first admin user as demo current user
-  const { data: users } = useQuery<any[]>({
-    queryKey: ["/api/users"],
-  });
-
-  const currentUser = users?.find((u) => u.role === "admin") || users?.[0];
-
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined) => {
+    if (!name) return "??";
     return name
       .split(" ")
       .map((n) => n[0])
@@ -101,7 +96,7 @@ export function AppSidebar() {
         label: "Admin",
         className: "bg-primary/10 text-primary border-primary/20"
       },
-      sales_manager: {
+      manager: {
         label: "Manager",
         className: "bg-info/10 text-info border-info/20"
       },
@@ -111,6 +106,14 @@ export function AppSidebar() {
       },
     };
     return variants[role] || variants.sales_rep;
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
   return (
@@ -196,7 +199,11 @@ export function AppSidebar() {
                 Preferences
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" data-testid="menu-logout">
+              <DropdownMenuItem
+                className="text-destructive"
+                data-testid="menu-logout"
+                onClick={handleLogout}
+              >
                 <LogOut className="h-4 w-4 mr-2" />
                 Log Out
               </DropdownMenuItem>
