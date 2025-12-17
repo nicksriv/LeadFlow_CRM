@@ -136,16 +136,64 @@ export class LinkedInAuthService {
 
             console.log(`[LinkedIn Auth] Submitting 2FA code for user ${userId}...`);
 
-            // Try to find the input field. It varies.
-            // Common IDs: input__phone_verification_pin, input__email_verification_pin
-            const inputSelector = 'input[name="pin"], input#input__phone_verification_pin, input#input__email_verification_pin';
+            // Try multiple selectors for the verification code input (LinkedIn changes these frequently)
+            const possibleSelectors = [
+                'input[name="pin"]',
+                'input#input__phone_verification_pin',
+                'input#input__email_verification_pin',
+                'input[aria-label*="verification"]',
+                'input[aria-label*="code"]',
+                'input[data-testid*="verification"]',
+                'input[type="text"][autocomplete="one-time-code"]',
+                'input[inputmode="numeric"]',
+                '#verification-code',
+                '.input_verification_pin',
+                'input.challenge-form__input'
+            ];
 
-            await this.page.waitForSelector(inputSelector, { timeout: 10000 });
+            let inputSelector: string | null = null;
+            for (const selector of possibleSelectors) {
+                try {
+                    await this.page.waitForSelector(selector, { timeout: 2000 });
+                    inputSelector = selector;
+                    console.log(`[LinkedIn Auth] Found 2FA input using selector: ${selector}`);
+                    break;
+                } catch {
+                    // Try next selector
+                }
+            }
+
+            if (!inputSelector) {
+                throw new Error('Could not find 2FA verification code input field. LinkedIn may have changed their page structure.');
+            }
+
             await this.page.type(inputSelector, code, { delay: 100 });
 
-            // Click submit button
-            const submitSelector = 'button#two-step-submit-button, button[type="submit"]';
-            await this.page.waitForSelector(submitSelector, { timeout: 5000 });
+            // Click submit button - try multiple selectors
+            const submitSelectors = [
+                'button#two-step-submit-button',
+                'button[type="submit"]',
+                'button[data-testid="submit-button"]',
+                'button.primary-action',
+                'button:has-text("Submit")',
+                'button:has-text("Verify")'
+            ];
+
+            let submitSelector: string | null = null;
+            for (const selector of submitSelectors) {
+                try {
+                    await this.page.waitForSelector(selector, { timeout: 2000 });
+                    submitSelector = selector;
+                    console.log(`[LinkedIn Auth] Found submit button using selector: ${selector}`);
+                    break;
+                } catch {
+                    // Try next selector
+                }
+            }
+
+            if (!submitSelector) {
+                throw new Error('Could not find submit button. LinkedIn may have changed their page structure.');
+            }
 
             await Promise.all([
                 this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }),
