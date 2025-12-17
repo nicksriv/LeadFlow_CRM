@@ -15,6 +15,17 @@ interface SearchFilters {
     company?: string;
 }
 
+interface SearchResponse {
+    results: ProfileResult[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        hasMore: boolean;
+    };
+    message?: string;
+}
+
 interface ProfileResult {
     id: string;
     name: string;
@@ -43,7 +54,46 @@ interface ProfileResult {
     };
 }
 
+// LinkedIn Location Mapping (geoUrn codes for location filtering)
+const LINKEDIN_LOCATIONS: Record<string, string> = {
+    // Countries
+    'us': '103644278',
+    'usa': '103644278',
+    'united states': '103644278',
+    'india': '102713980',
+    'uk': '101165590',
+    'united kingdom': '101165590',
+    'canada': '101174742',
+    'australia': '101452733',
+    'singapore': '102454443',
+    'uae': '104305776',
+    'dubai': '104305776',
 
+    // Major Indian Cities
+    'mumbai': '105214831',
+    'bangalore': '105214077',
+    'bengaluru': '105214077',
+    'delhi': '106156739',
+    'new delhi': '106156739',
+    'hyderabad': '105193085',
+    'chennai': '102713982',
+    'pune': '106057199',
+    'kolkata': '105193567',
+
+    // Major US Cities
+    'new york': '102571732',
+    'san francisco': '102277331',
+    'los angeles': '102448103',
+    'chicago': '103112676',
+    'boston': '100293800',
+    'seattle': '104116018',
+    'austin': '100975049',
+
+    // Other Major Cities
+    'london': '102257491',
+    'toronto': '100025096',
+    'sydney': '104769905',
+};
 
 export class LinkedInScraperService {
     private browser: Browser | null = null;
@@ -52,7 +102,7 @@ export class LinkedInScraperService {
     /**
      * Perform LinkedIn people search using authenticated session
      */
-    async searchPeople(userId: string, filters: SearchFilters): Promise<ProfileResult[]> {
+    async searchPeople(userId: string, filters: SearchFilters): Promise<SearchResponse> {
         try {
             // Get LinkedIn session cookies for this specific user
             const cookies = await linkedInAuthService.getCookies(userId);
@@ -259,14 +309,137 @@ export class LinkedInScraperService {
                 return data;
             });
 
-            console.log(`[LinkedIn Scraper] Found ${results.length} results`);
+            console.log(`[LinkedIn Scraper] Found ${results.length} results on page 1`);
+
+            // PAGINATION: Navigate through multiple pages using URL parameters
+            // LinkedIn supports &page=2, &page=3, etc. - more reliable than clicking buttons
+            const maxPages = 3;
+            let allResults = [...results];
+            let currentPageNum = 1;
+
+            while (currentPageNum < maxPages && this.page) {
+                try {
+                    currentPageNum++;
+                    console.log(`[LinkedIn Scraper] Navigating to page ${currentPageNum}...`);
+
+                    // Build URL for next page
+                    const nextPageUrl = this.buildSearchUrl(filters) + `&page=${currentPageNum}`;
+                    console.log(`[LinkedIn Scraper] Page ${currentPageNum} URL: ${nextPageUrl}`);
+
+                    // Navigate to the page (use domcontentloaded instead of networkidle2 for faster loads)
+                    await this.page.goto(nextPageUrl, {
+                        waitUntil: 'domcontentloaded',
+                        timeout: 60000
+                    });
+
+                    // Wait longer for LinkedIn to fully render results
+                    await new Promise(resolve => setTimeout(resolve, 8000));
+
+                    // Extract results from this page using same logic as page 1
+                    const pageResults = await this.page.evaluate(() => {
+                        const data: any[] = [];
+                        const resultNodes = document.querySelectorAll('div[data-view-name="people-search-result"]');
+
+                        resultNodes.forEach((node) => {
+                            try {
+                                const titleLink = node.querySelector('a[data-view-name="search-result-lockup-title"]');
+                                if (!titleLink) return;
+
+                                const profileUrl = (titleLink as HTMLAnchorElement).href.split('?')[0];
+                                const name = (titleLink as HTMLElement).innerText.trim();
+                                const img = node.querySelector('img');
+                                const avatar = img ? img.src : null;
+
+                                let headline = '';
+                                let location = '';
+                                let summary = '';
+                                let currentCompany = '';
+
+                                const titleParagraph = titleLink.closest('p');
+                                if (titleParagraph && titleParagraph.parentElement) {
+                                    const paragraphs = Array.from(titleParagraph.parentElement.querySelectorAll('p'));
+
+                                    if (paragraphs.length > 1) {
+                                        headline = paragraphs[1].innerText.trim();
+                                    }
+
+                                    if (paragraphs.length > 2) {
+                                        location = paragraphs[2].innerText.trim();
+                                    }
+
+                                    for (let i = 3; i < paragraphs.length; i++) {
+                                        const text = paragraphs[i].innerText.trim();
+                                        if (text.startsWith('Summary:')) {
+                                            summary = text.replace('Summary:', '').trim();
+                                        } else if (text.startsWith('Current:')) {
+                                            currentCompany = text.replace('Current:', '').trim();
+                                        } else if (!summary && text.length > 20) {
+                                            summary = text;
+                                        }
+                                    }
+                                }
+
+                                let profileId = '';
+                                const urlParts = profileUrl.split('/in/');
+                                if (urlParts.length > 1) {
+                                    profileId = urlParts[1].split('/')[0];
+                                }
+
+                                if (profileId) {
+                                    data.push({
+                                        id: profileId,
+                                        name,
+                                        url: profileUrl,
+                                        avatar,
+                                        headline,
+                                        location,
+                                        summary,
+                                        currentCompany,
+                                        activity: 'Active recently'
+                                    });
+                                }
+                            } catch (err) {
+                                console.error('[LinkedIn Scraper] Error extracting result:', err);
+                            }
+                        });
+
+                        return data;
+                    });
+
+                    console.log(`[LinkedIn Scraper] Found ${pageResults.length} results on page ${currentPageNum} `);
+                    allResults = [...allResults, ...pageResults];
+
+                    // If we got 0 results, this page doesn't exist - stop
+                    if (pageResults.length === 0) {
+                        console.log(`[LinkedIn Scraper] No results on page ${currentPageNum}, stopping pagination`);
+                        break;
+                    }
+
+                } catch (paginationError: any) {
+                    console.error(`[LinkedIn Scraper] Error navigating to page ${currentPageNum}: `, paginationError.message);
+                    break;
+                }
+            }
+
+            console.log(`[LinkedIn Scraper] Total results from ${currentPageNum} page(s): ${allResults.length} `);
 
             // Keep browser open for a moment
             await new Promise(resolve => setTimeout(resolve, 2000));
 
             await this.cleanup();
 
-            return results;
+            // Return SearchResponse format with all results
+            return {
+                results: allResults,
+                pagination: {
+                    page: 1,
+                    limit: allResults.length,
+                    total: allResults.length,
+                    hasMore: currentPageNum >= maxPages
+                },
+                message: allResults.length === 0 ? "No profiles found. Try broader search terms or different location." :
+                    allResults.length < 10 ? `Found ${allResults.length} profile(s).LinkedIn may have limited results for this search.` : undefined
+            };
 
         } catch (error: any) {
             console.error("[LinkedIn Scraper] Error:", error);
@@ -276,36 +449,60 @@ export class LinkedInScraperService {
     }
 
     /**
-     * Build LinkedIn search URL from filters
+     * Build LinkedIn search URL from filters with location support
      */
     private buildSearchUrl(filters: SearchFilters): string {
         const baseUrl = 'https://www.linkedin.com/search/results/people/';
         const params: string[] = [];
 
-        // Build search keywords
+        // Build search keywords (Title + Industry + Company)
         const keywords: string[] = [];
 
         if (filters.jobTitle) {
             keywords.push(filters.jobTitle);
         }
 
+        if (filters.industry) {
+            keywords.push(filters.industry);
+        }
+
         if (filters.company) {
-            keywords.push(`${filters.company}`);
+            keywords.push(filters.company);
         }
 
-        // Combine all terms into a single keywords parameter
-        let finalKeywords = keywords.join(' ');
-
-        if (filters.keywords) {
-            finalKeywords = (finalKeywords + ' ' + filters.keywords).trim();
-        }
+        // Join keywords with spaces
+        const finalKeywords = keywords.join(' ').trim();
 
         if (finalKeywords) {
             params.push(`keywords=${encodeURIComponent(finalKeywords)}`);
         }
 
+        // Handle LOCATION using geoUrn for accurate filtering
+        if (filters.keywords) {
+            const locationKey = filters.keywords.toLowerCase().trim();
+            const geoUrn = LINKEDIN_LOCATIONS[locationKey];
+
+            if (geoUrn) {
+                // Use LinkedIn's native location filter with geoUrn
+                params.push(`geoUrn=%5B%22${geoUrn}%22%5D`); // URL-encoded ["geoUrnValue"]
+                console.log(`[LinkedIn Scraper] Using geoUrn for location "${filters.keywords}": ${geoUrn}`);
+            } else {
+                // Fallback: add location to keywords if not in mapping
+                console.log(`[LinkedIn Scraper] Location "${filters.keywords}" not in mapping, adding to keywords`);
+                if (finalKeywords) {
+                    // Update the keywords param to include location
+                    const updatedKeywords = `${finalKeywords} ${filters.keywords}`;
+                    params[0] = `keywords=${encodeURIComponent(updatedKeywords)}`;
+                } else {
+                    params.push(`keywords=${encodeURIComponent(filters.keywords)}`);
+                }
+            }
+        }
+
         const queryString = params.length > 0 ? `?${params.join('&')}` : '';
-        return baseUrl + queryString;
+        const fullUrl = baseUrl + queryString;
+        console.log(`[LinkedIn Scraper] Search URL: ${fullUrl}`);
+        return fullUrl;
     }
 
     /**
@@ -316,7 +513,7 @@ export class LinkedInScraperService {
 
         try {
             const pageTitle = await this.page.title();
-            console.log(`[LinkedIn Scraper] Page title: ${pageTitle}`);
+            console.log(`[LinkedIn Scraper] Page title: ${pageTitle} `);
 
             // Give the page plenty of time to fully render
             await new Promise(resolve => setTimeout(resolve, 3000));

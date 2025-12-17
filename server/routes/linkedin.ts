@@ -67,31 +67,25 @@ async function getAuthenticatedPage(cookie: string) {
 
 router.post("/search", async (req, res) => {
     try {
-        const { jobTitle, industry, keywords } = req.body;
+        const { jobTitle, industry, keywords, page, limit } = req.body;
 
-        console.log(`[LinkedIn Search] Searching for: ${jobTitle} in ${industry} with keywords: ${keywords}`);
+        console.log(`[LinkedIn Search] Searching for: ${jobTitle} in ${industry} with keywords: ${keywords}, page: ${page || 1}, limit: ${limit || 10}`);
 
         // Use authenticated scraper instead of LinkedAPI
         const { linkedInScraper } = await import("../services/linkedin-scraper.js");
 
-        const results = await linkedInScraper.searchPeople(req.user!.id, {
+        const searchResponse = await linkedInScraper.searchPeople(req.user!.id, {
             jobTitle,
             industry,
-            keywords
+            keywords,
+            page: page || 1,
+            limit: limit || 10
         });
 
-        console.log(`[LinkedIn Search] Found ${results.length} results`);
+        console.log(`[LinkedIn Search] Found ${searchResponse.results.length} results on page ${searchResponse.pagination.page}`);
 
-        // If no results, provide helpful message
-        if (results.length === 0) {
-            return res.status(200).json({
-                results: [],
-                message: "No profiles found. Try: (1) Broader job titles, (2) Company-specific searches, or (3) Different locations."
-            });
-        }
-
-        // Return results in consistent format
-        res.json({ results });
+        // Return full response with pagination metadata
+        res.json(searchResponse);
 
     } catch (error: any) {
         console.error("Search error:", error);
@@ -104,7 +98,7 @@ router.post("/search", async (req, res) => {
             });
         }
 
-        res.status(500).json({ message: error.message || "Failed to search profiles" });
+        res.status(500).json({ message: error.message || "Failed to search profiles. Please try again or check your LinkedIn connection." });
     }
 });
 
@@ -163,7 +157,7 @@ router.post("/scrape", async (req, res) => {
                 };
 
                 // CRITICAL: Don't overwrite real email with fallback email
-                const isFallbackEmail = (email: string | null) => !email || email === 'technology@codescribed.com';
+                const isFallbackEmail = (email: string | null | undefined) => !email || email === 'technology@codescribed.com';
                 if (!isFallbackEmail(profile.email)) {
                     // New profile has real email - use it
                     updateData.email = profile.email;

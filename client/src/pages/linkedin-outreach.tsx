@@ -73,6 +73,12 @@ export default function LinkedInOutreach() {
         return saved ? JSON.parse(saved) : [];
     });
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [resultsPerPage, setResultsPerPage] = useState(10);
+    const [totalResults, setTotalResults] = useState(0);
+    const [hasMoreResults, setHasMoreResults] = useState(false);
+
     // Analysis State
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => localStorage.getItem("linkedin_selectedProfileId"));
     const [profile, setProfile] = useState<LinkedInProfile | null>(() => {
@@ -112,7 +118,9 @@ export default function LinkedInOutreach() {
             const res = await apiRequest("POST", "/api/linkedin/search", {
                 jobTitle,
                 industry,
-                keywords
+                keywords,
+                page: currentPage,
+                limit: resultsPerPage
             });
             return res.json();
         },
@@ -120,16 +128,23 @@ export default function LinkedInOutreach() {
             const results = data.results || [];
             setSearchResults(results);
 
+            // Update pagination metadata
+            if (data.pagination) {
+                setTotalResults(data.pagination.total);
+                setHasMoreResults(data.pagination.hasMore);
+            }
+
+            // Show edge case messages from backend if available
             if (data.message) {
                 toast({
-                    title: "Search Complete",
+                    title: results.length === 0 ? "No Results" : "Search Complete",
                     description: data.message,
-                    variant: "default"
+                    variant: results.length === 0 ? "default" : "default"
                 });
             } else if (results.length > 0) {
                 toast({
                     title: "Search Complete",
-                    description: `Found ${results.length} profiles`,
+                    description: `Found ${results.length} profile${results.length === 1 ? '' : 's'} on page ${data.pagination?.page || 1}`,
                 });
             }
         },
@@ -268,6 +283,27 @@ export default function LinkedInOutreach() {
         setEmailDraft(null);
     };
 
+    // Pagination handlers
+    const handleNextPage = () => {
+        if (hasMoreResults) {
+            setCurrentPage(prev => prev + 1);
+            searchMutation.mutate();
+        }
+    };
+
+    const handlePreviousPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(prev => prev - 1);
+            searchMutation.mutate();
+        }
+    };
+
+    // Reset pagination when filters change
+    const handleSearchWithReset = () => {
+        setCurrentPage(1);
+        searchMutation.mutate();
+    };
+
     return (
         <div className="space-y-6 max-w-6xl mx-auto p-4">
             {/* Header */}
@@ -357,11 +393,11 @@ export default function LinkedInOutreach() {
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Industry</label>
                                             <Input
-                                                placeholder="e.g. SaaS, Fintech"
+                                                placeholder="e.g. SaaS, Fintech, Healthcare"
                                                 value={industry}
                                                 onChange={(e) => setIndustry(e.target.value)}
                                             />
-                                            <p className="text-xs text-muted-foreground">Not currently used by search API</p>
+                                            <p className="text-xs text-muted-foreground">Industry sector or vertical</p>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Location</label>
@@ -392,7 +428,7 @@ export default function LinkedInOutreach() {
                                         <div className="flex gap-2">
                                             <Button
                                                 className="flex-1"
-                                                onClick={() => searchMutation.mutate()}
+                                                onClick={handleSearchWithReset}
                                                 disabled={searchMutation.isPending}
                                             >
                                                 {searchMutation.isPending ? (
@@ -425,9 +461,16 @@ export default function LinkedInOutreach() {
 
                                 {/* Search Results */}
                                 <div className="lg:col-span-2 space-y-4">
-                                    <h3 className="text-lg font-semibold">
-                                        {searchResults.length > 0 ? `Found ${searchResults.length} Prospects` : "Results will appear here"}
-                                    </h3>
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-lg font-semibold">
+                                            {searchResults.length > 0 ? `Found ${totalResults} Profile${totalResults === 1 ? '' : 's'}` : "Results will appear here"}
+                                        </h3>
+                                        {totalResults > 0 && (
+                                            <p className="text-sm text-muted-foreground">
+                                                Showing {(currentPage - 1) * resultsPerPage + 1}-{Math.min(currentPage * resultsPerPage, (currentPage - 1) * resultsPerPage + searchResults.length)} of {totalResults}
+                                            </p>
+                                        )}
+                                    </div>
 
                                     {searchResults.length === 0 && !searchMutation.isPending && (
                                         <div className="text-center py-12 border-2 border-dashed rounded-lg text-muted-foreground">
@@ -520,6 +563,29 @@ export default function LinkedInOutreach() {
                                             </Card>
                                         ))}
                                     </div>
+
+                                    {/* Pagination Controls */}
+                                    {searchResults.length > 0 && (totalResults > resultsPerPage || currentPage > 1) && (
+                                        <div className="flex items-center justify-between pt-4 border-t">
+                                            <Button
+                                                variant="outline"
+                                                onClick={handlePreviousPage}
+                                                disabled={currentPage === 1 || searchMutation.isPending}
+                                            >
+                                                ← Previous
+                                            </Button>
+                                            <div className="text-sm text-muted-foreground">
+                                                Page {currentPage} {hasMoreResults && 'of many'}
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleNextPage}
+                                                disabled={!hasMoreResults || searchMutation.isPending}
+                                            >
+                                                Next →
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (
