@@ -67,7 +67,7 @@ async function getAuthenticatedPage(cookie: string) {
 
 router.post("/search", async (req, res) => {
     try {
-        const { jobTitle, industry, keywords, page, limit } = req.body;
+        const { jobTitle, industry, keywords, company, page, limit } = req.body;
 
         console.log(`[LinkedIn Search] Searching for: ${jobTitle} in ${industry} with keywords: ${keywords}, page: ${page || 1}, limit: ${limit || 10}`);
 
@@ -78,8 +78,7 @@ router.post("/search", async (req, res) => {
             jobTitle,
             industry,
             keywords,
-            page: page || 1,
-            limit: limit || 10
+            company
         });
 
         console.log(`[LinkedIn Search] Found ${searchResponse.results.length} results on page ${searchResponse.pagination.page}`);
@@ -93,12 +92,78 @@ router.post("/search", async (req, res) => {
         // Check if it's an authentication error
         if (error.message?.includes("Not authenticated")) {
             return res.status(401).json({
-                message: "LinkedIn account not connected. Please connect your LinkedIn account first.",
-                needsAuth: true
+                error: "Not authenticated",
+                message: "Please connect your LinkedIn account first"
             });
         }
 
-        res.status(500).json({ message: error.message || "Failed to search profiles. Please try again or check your LinkedIn connection." });
+        res.status(500).json({
+            error: "Search failed",
+            message: error.message
+        });
+    }
+});
+
+// Get profile history grouped by search criteria
+router.get("/history", async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const { profileHistoryService } = await import("../services/profile-history.js");
+
+        const start = startDate ? new Date(startDate as string) : undefined;
+        const end = endDate ? new Date(endDate as string) : undefined;
+
+        const groupedHistory = await profileHistoryService.getHistoryGrouped(
+            req.user!.id,
+            start,
+            end
+        );
+
+        res.json(groupedHistory);
+    } catch (error: any) {
+        console.error("History fetch error:", error);
+        res.status(500).json({
+            error: "Failed to fetch history",
+            message: error.message
+        });
+    }
+});
+
+// Get profile history statistics
+router.get("/history/stats", async (req, res) => {
+    try {
+        const { profileHistoryService } = await import("../services/profile-history.js");
+
+        const stats = await profileHistoryService.getStats(req.user!.id);
+
+        res.json(stats);
+    } catch (error: any) {
+        console.error("Stats fetch error:", error);
+        res.status(500).json({
+            error: "Failed to fetch stats",
+            message: error.message
+        });
+    }
+});
+
+// Delete old history entries (optional cleanup)
+router.delete("/history/cleanup", async (req, res) => {
+    try {
+        const { days = 90 } = req.body;
+        const { profileHistoryService } = await import("../services/profile-history.js");
+
+        const deleted = await profileHistoryService.deleteOlderThan(req.user!.id, Number(days));
+
+        res.json({
+            message: `Deleted ${deleted} old entries`,
+            deleted
+        });
+    } catch (error: any) {
+        console.error("Cleanup error:", error);
+        res.status(500).json({
+            error: "Cleanup failed",
+            message: error.message
+        });
     }
 });
 
@@ -371,7 +436,7 @@ router.post("/send-email", async (req, res) => {
 });
 
 // Get archived profiles
-router.post("/archives", async (req: Request, res: Response) => {
+router.get("/archives", async (req: Request, res: Response) => {
     try {
         // Get scraped profiles (role-based access)
         const profiles = await storage.getScrapedProfiles(req.user!);

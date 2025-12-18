@@ -188,10 +188,51 @@ export const users = pgTable("users", {
 // Authentication sessions
 export const sessions = pgTable("sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// LinkedIn Profile History table - tracks all viewed profiles for deduplication and history
+export const linkedInProfileHistory = pgTable("linkedin_profile_history", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  // Profile information
+  profileId: text("profile_id").notNull(), // LinkedIn profile ID (e.g., "john-doe-123")
+  profileUrl: text("profile_url").notNull(),
+  name: text("name").notNull(),
+  headline: text("headline"),
+  location: text("location"),
+  avatar: text("avatar"),
+
+  // Search criteria for grouping
+  searchCriteria: jsonb("search_criteria").notNull(), // {"jobTitle":"VP","industry":"SaaS","location":"Mumbai"}
+  searchKey: text("search_key").notNull(), // Human-readable: "VP • SaaS • Mumbai"
+
+  // Timestamp
+  viewedAt: timestamp("viewed_at").defaultNow().notNull(),
+}, (table) => ({
+  // Unique constraint: one profile per user
+  uniqueUserProfile: sql`UNIQUE(user_id, profile_id)`,
+
+  // Index for binary search lookups
+  userProfileIdx: sql`CREATE INDEX IF NOT EXISTS idx_profile_history_user_profile ON linkedin_profile_history(user_id, profile_id)`,
+
+  // Index for date range filtering
+  viewedAtIdx: sql`CREATE INDEX IF NOT EXISTS idx_profile_history_viewed_at ON linkedin_profile_history(user_id, viewed_at DESC)`,
+
+  // Index for grouping by search
+  searchKeyIdx: sql`CREATE INDEX IF NOT EXISTS idx_profile_history_search ON linkedin_profile_history(user_id, search_key, viewed_at DESC)`,
+
+  // Index for sorted profile IDs (binary search)
+  sortedIdsIdx: sql`CREATE INDEX IF NOT EXISTS idx_profile_history_sorted_ids ON linkedin_profile_history(user_id, profile_id ASC)`,
+}));
+
+// Insert schema for profile history
+export const insertLinkedInProfileHistorySchema = createInsertSchema(linkedInProfileHistory);
+export type LinkedInProfileHistory = typeof linkedInProfileHistory.$inferSelect;
+export type InsertLinkedInProfileHistory = typeof linkedInProfileHistory.$inferInsert;
 
 // Assignment rules
 export const assignmentRules = pgTable("assignment_rules", {

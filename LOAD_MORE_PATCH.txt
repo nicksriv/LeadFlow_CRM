@@ -1,0 +1,37 @@
+// Lines to add after line 580 in linkedin-outreach.tsx
+// Replace line 580:
+//   FROM: <div className="flex items-center justify-between pt-4 border-t">
+//   TO:   <div className="space-y-4 pt-4 border-t">
+//         <div className="flex items-center justify-between">
+
+// Then after line 597 (the </Button> for Next button), before the </div> and )}
+// Add these lines:
+
+                                        </div>
+                                        
+                                        {/* Load More Button - Shows on last page when >= 30 results */}
+                                        {canLoadMore && (
+                                            <div className="text-center">
+                                                <Button
+                                                    onClick={handleLoadMore}
+                                                    disabled={searchMutation.isPending}
+                                                    className="w-full max-w-md"
+                                                    size="lg"
+                                                >
+                                                    {searchMutation.isPending ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                            Loading more...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Search className="h-4 w-4 mr-2" />
+                                                            Load More Profiles
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <p className="text-xs text-muted-foreground mt-2">
+                                                    Fetch 30 more unique profiles
+                                                </p>
+                                            </div>
+                                        )}

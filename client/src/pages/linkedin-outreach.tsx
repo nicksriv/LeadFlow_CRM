@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LinkedInAuthModal } from "@/components/linkedin-auth-modal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArchivesTable } from "@/components/ArchivesTable";
+import { HistoryTab } from "@/components/HistoryTab";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface LinkedInProfile {
@@ -68,16 +69,22 @@ export default function LinkedInOutreach() {
     const [jobTitle, setJobTitle] = useState(() => localStorage.getItem("linkedin_jobTitle") || "");
     const [industry, setIndustry] = useState(() => localStorage.getItem("linkedin_industry") || "");
     const [keywords, setKeywords] = useState(() => localStorage.getItem("linkedin_keywords") || "");
-    const [searchResults, setSearchResults] = useState<SearchResult[]>(() => {
-        const saved = localStorage.getItem("linkedin_searchResults");
+    // All fetched results from backend (30-60 profiles)
+    const [allResults, setAllResults] = useState<SearchResult[]>(() => {
+        const saved = localStorage.getItem("linkedin_allResults");
         return saved ? JSON.parse(saved) : [];
     });
 
-    // Pagination State
+    // Client-side pagination state
     const [currentPage, setCurrentPage] = useState(1);
-    const [resultsPerPage, setResultsPerPage] = useState(10);
-    const [totalResults, setTotalResults] = useState(0);
-    const [hasMoreResults, setHasMoreResults] = useState(false);
+    const resultsPerPage = 10;
+
+    // Compute paginated results (slice from allResults)
+    const startIndex = (currentPage - 1) * resultsPerPage;
+    const endIndex = startIndex + resultsPerPage;
+    const paginatedResults = allResults.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(allResults.length / resultsPerPage);
+    const canLoadMore = currentPage === totalPages && allResults.length >= 30;
 
     // Analysis State
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => localStorage.getItem("linkedin_selectedProfileId"));
@@ -89,18 +96,21 @@ export default function LinkedInOutreach() {
     const [emailDraft, setEmailDraft] = useState<EmailDraft | null>(null);
     const [productContext, setProductContext] = useState("");
 
+    // Tab state for auto-refresh
+    const [activeTab, setActiveTab] = useState("search");
+
     // Persist state changes
     useEffect(() => {
         localStorage.setItem("linkedin_searchMode", JSON.stringify(searchMode));
         localStorage.setItem("linkedin_jobTitle", jobTitle);
         localStorage.setItem("linkedin_industry", industry);
         localStorage.setItem("linkedin_keywords", keywords);
-        localStorage.setItem("linkedin_searchResults", JSON.stringify(searchResults));
+        localStorage.setItem("linkedin_allResults", JSON.stringify(allResults));
         if (selectedProfileId) localStorage.setItem("linkedin_selectedProfileId", selectedProfileId);
         else localStorage.removeItem("linkedin_selectedProfileId");
         if (profile) localStorage.setItem("linkedin_profile", JSON.stringify(profile));
         else localStorage.removeItem("linkedin_profile");
-    }, [searchMode, jobTitle, industry, keywords, searchResults, selectedProfileId, profile]);
+    }, [searchMode, jobTitle, industry, keywords, allResults, selectedProfileId, profile]);
 
     // Check LinkedIn authentication status
     const { data: authStatus, refetch: refetchAuthStatus } = useQuery<{ connected: boolean }>({
@@ -126,12 +136,14 @@ export default function LinkedInOutreach() {
         },
         onSuccess: (data) => {
             const results = data.results || [];
-            setSearchResults(results);
 
-            // Update pagination metadata
-            if (data.pagination) {
-                setTotalResults(data.pagination.total);
-                setHasMoreResults(data.pagination.hasMore);
+            // For Load More, append to existing results
+            if (canLoadMore && currentPage === totalPages) {
+                setAllResults(prev => [...prev, ...results]);
+            } else {
+                // New search, replace all results
+                setAllResults(results);
+                setCurrentPage(1);
             }
 
             // Show edge case messages from backend if available
@@ -283,25 +295,73 @@ export default function LinkedInOutreach() {
         setEmailDraft(null);
     };
 
-    // Pagination handlers
+    // Handle analyzing profile from History tab
+    const handleAnalyzeFromHistory = (profileUrl: string, profileId: string, name: string) => {
+        // Switch to search tab and trigger scrape
+        setActiveTab("search");
+        setSearchMode(false);
+        setSelectedProfileId(profileId);
+
+        scrapeMutation.mutate({
+            id: profileId,
+            name,
+            url: profileUrl,
+            headline: "",
+            location: "",
+            activity: "",
+            avatar: ""
+        });
+    };
+
+    // Pagination handlers - Client-side only (no backend calls)
     const handleNextPage = () => {
-        if (hasMoreResults) {
+        if (currentPage < totalPages) {
             setCurrentPage(prev => prev + 1);
-            searchMutation.mutate();
         }
     };
 
     const handlePreviousPage = () => {
         if (currentPage > 1) {
             setCurrentPage(prev => prev - 1);
-            searchMutation.mutate();
         }
+    };
+
+    // Load More handler - Triggers new backend search
+    const handleLoadMore = () => {
+        searchMutation.mutate();
     };
 
     // Reset pagination when filters change
     const handleSearchWithReset = () => {
         setCurrentPage(1);
         searchMutation.mutate();
+    };
+
+    // Handle tab changes with auto-refresh for Archives and History
+    const handleTabChange = (value: string) => {
+        setActiveTab(value);
+
+        // Only refresh if no mutations are in progress
+        const isOperationInProgress =
+            searchMutation.isPending ||
+            scrapeMutation.isPending ||
+            generateEmailMutation.isPending ||
+            sendEmailMutation.isPending ||
+            hunterEnrichMutation.isPending;
+
+        if (isOperationInProgress) {
+            // Don't refresh if operations are ongoing
+            return;
+        }
+
+        // Refresh data when switching to Archives or History tabs
+        if (value === "archives") {
+            queryClient.invalidateQueries({ queryKey: ["/api/linkedin/archives"] });
+        } else if (value === "history") {
+            // Invalidate both history and stats queries
+            queryClient.invalidateQueries({ queryKey: ["/api/linkedin/history"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/linkedin/history/stats"] });
+        }
     };
 
     return (
@@ -337,10 +397,11 @@ export default function LinkedInOutreach() {
                 onSuccess={() => refetchAuthStatus()}
             />
 
-            <Tabs defaultValue="search" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+            <Tabs defaultValue="search" value={activeTab} onValueChange={handleTabChange} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 max-w-[600px]">
                     <TabsTrigger value="search">Search & Analyze</TabsTrigger>
                     <TabsTrigger value="archives">Archives</TabsTrigger>
+                    <TabsTrigger value="history">History</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="mt-6">
@@ -445,11 +506,11 @@ export default function LinkedInOutreach() {
                                                     setJobTitle("");
                                                     setIndustry("");
                                                     setKeywords("");
-                                                    setSearchResults([]);
+                                                    setAllResults([]);
                                                     localStorage.removeItem("linkedin_jobTitle");
                                                     localStorage.removeItem("linkedin_industry");
                                                     localStorage.removeItem("linkedin_keywords");
-                                                    localStorage.removeItem("linkedin_searchResults");
+                                                    localStorage.removeItem("linkedin_allResults");
                                                 }}
                                                 title="Reset Search"
                                             >
@@ -463,16 +524,16 @@ export default function LinkedInOutreach() {
                                 <div className="lg:col-span-2 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-lg font-semibold">
-                                            {searchResults.length > 0 ? `Found ${totalResults} Profile${totalResults === 1 ? '' : 's'}` : "Results will appear here"}
+                                            {allResults.length > 0 ? `Found ${allResults.length} Profile${allResults.length === 1 ? '' : 's'}` : "Results will appear here"}
                                         </h3>
-                                        {totalResults > 0 && (
+                                        {allResults.length > 0 && (
                                             <p className="text-sm text-muted-foreground">
-                                                Showing {(currentPage - 1) * resultsPerPage + 1}-{Math.min(currentPage * resultsPerPage, (currentPage - 1) * resultsPerPage + searchResults.length)} of {totalResults}
+                                                Showing {(currentPage - 1) * 10 + 1}-{Math.min(currentPage * 10, allResults.length)} of {allResults.length}
                                             </p>
                                         )}
                                     </div>
 
-                                    {searchResults.length === 0 && !searchMutation.isPending && (
+                                    {allResults.length === 0 && !searchMutation.isPending && (
                                         <div className="text-center py-12 border-2 border-dashed rounded-lg text-muted-foreground">
                                             <User className="h-12 w-12 mx-auto mb-3 opacity-20" />
                                             <p>Enter filters and search to find leads.</p>
@@ -489,7 +550,7 @@ export default function LinkedInOutreach() {
                                     )}
 
                                     <div className="grid gap-4">
-                                        {searchResults.map((result) => (
+                                        {paginatedResults.map((result) => (
                                             <Card key={result.id} className="hover:shadow-md transition-shadow">
                                                 <CardContent className="p-4 flex items-start gap-4">
                                                     <Avatar className="h-12 w-12">
@@ -565,25 +626,54 @@ export default function LinkedInOutreach() {
                                     </div>
 
                                     {/* Pagination Controls */}
-                                    {searchResults.length > 0 && (totalResults > resultsPerPage || currentPage > 1) && (
-                                        <div className="flex items-center justify-between pt-4 border-t">
-                                            <Button
-                                                variant="outline"
-                                                onClick={handlePreviousPage}
-                                                disabled={currentPage === 1 || searchMutation.isPending}
-                                            >
-                                                ← Previous
-                                            </Button>
-                                            <div className="text-sm text-muted-foreground">
-                                                Page {currentPage} {hasMoreResults && 'of many'}
+                                    {allResults.length > 0 && (
+                                        <div className="space-y-4 pt-4 border-t">
+                                            <div className="flex items-center justify-between">
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={handlePreviousPage}
+                                                    disabled={currentPage === 1}
+                                                >
+                                                    ← Previous
+                                                </Button>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Page {currentPage} of {totalPages} • {allResults.length} profiles
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={handleNextPage}
+                                                    disabled={currentPage >= totalPages}
+                                                >
+                                                    Next →
+                                                </Button>
                                             </div>
-                                            <Button
-                                                variant="outline"
-                                                onClick={handleNextPage}
-                                                disabled={!hasMoreResults || searchMutation.isPending}
-                                            >
-                                                Next →
-                                            </Button>
+
+                                            {/* Load More Button - Shows on last page when >= 30 results */}
+                                            {canLoadMore && (
+                                                <div className="text-center">
+                                                    <Button
+                                                        onClick={handleLoadMore}
+                                                        disabled={searchMutation.isPending}
+                                                        className="w-full max-w-md"
+                                                        size="lg"
+                                                    >
+                                                        {searchMutation.isPending ? (
+                                                            <>
+                                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                                Loading more...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Search className="h-4 w-4 mr-2" />
+                                                                Load More Profiles
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                    <p className="text-xs text-muted-foreground mt-2">
+                                                        Fetch 30 more unique profiles
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -787,6 +877,13 @@ export default function LinkedInOutreach() {
 
                 <TabsContent value="archives" className="mt-6">
                     <ArchivesTable />
+                </TabsContent>
+
+                <TabsContent value="history" className="mt-6">
+                    <HistoryTab
+                        onAnalyzeProfile={handleAnalyzeFromHistory}
+                        isAnalyzing={scrapeMutation.isPending}
+                    />
                 </TabsContent>
             </Tabs >
         </div >

@@ -2,6 +2,7 @@ import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer";
 import { linkedInAuthService } from "./linkedin-auth.js";
+import { profileHistoryService } from "./profile-history.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -311,31 +312,41 @@ export class LinkedInScraperService {
 
             console.log(`[LinkedIn Scraper] Found ${results.length} results on page 1`);
 
-            // PAGINATION: Navigate through multiple pages using URL parameters
-            // LinkedIn supports &page=2, &page=3, etc. - more reliable than clicking buttons
-            const maxPages = 3;
-            let allResults = [...results];
-            let currentPageNum = 1;
+            // Get viewed profile IDs for deduplication
+            console.log(`[LinkedIn Scraper] Fetching viewed profile history...`);
+            const viewedProfileIds = await profileHistoryService.getViewedProfileIds(userId);
+            console.log(`[LinkedIn Scraper] User has viewed ${viewedProfileIds.length} profiles previously`);
 
-            while (currentPageNum < maxPages && this.page) {
+            // Filter page 1 results for duplicates
+            let uniqueProfiles = results.filter(profile =>
+                !profileHistoryService.hasViewedProfile(profile.id, viewedProfileIds)
+            );
+            console.log(`[LinkedIn Scraper] Page 1: ${results.length} total, ${uniqueProfiles.length} unique`);
+
+            // RECURSIVE PAGINATION: Keep fetching until we have 30 unique profiles
+            const targetUniqueCount = 30;
+            const maxPages = 20; // Safety limit to prevent infinite loops
+            let currentPageNum = 1;
+            let allFetchedResults = [...results]; // Track all fetched for logging
+
+            while (uniqueProfiles.length < targetUniqueCount && currentPageNum < maxPages && this.page) {
                 try {
                     currentPageNum++;
-                    console.log(`[LinkedIn Scraper] Navigating to page ${currentPageNum}...`);
+                    console.log(`[LinkedIn Scraper] Need ${targetUniqueCount - uniqueProfiles.length} more unique profiles, fetching page ${currentPageNum}...`);
 
                     // Build URL for next page
                     const nextPageUrl = this.buildSearchUrl(filters) + `&page=${currentPageNum}`;
-                    console.log(`[LinkedIn Scraper] Page ${currentPageNum} URL: ${nextPageUrl}`);
 
-                    // Navigate to the page (use domcontentloaded instead of networkidle2 for faster loads)
+                    // Navigate to the page
                     await this.page.goto(nextPageUrl, {
                         waitUntil: 'domcontentloaded',
                         timeout: 60000
                     });
 
-                    // Wait longer for LinkedIn to fully render results
+                    // Wait for content to load
                     await new Promise(resolve => setTimeout(resolve, 8000));
 
-                    // Extract results from this page using same logic as page 1
+                    // Extract results from this page
                     const pageResults = await this.page.evaluate(() => {
                         const data: any[] = [];
                         const resultNodes = document.querySelectorAll('div[data-view-name="people-search-result"]');
@@ -406,39 +417,61 @@ export class LinkedInScraperService {
                         return data;
                     });
 
-                    console.log(`[LinkedIn Scraper] Found ${pageResults.length} results on page ${currentPageNum} `);
-                    allResults = [...allResults, ...pageResults];
+                    console.log(`[LinkedIn Scraper] Page ${currentPageNum}: fetched ${pageResults.length} results`);
+                    allFetchedResults = [...allFetchedResults, ...pageResults];
 
-                    // If we got 0 results, this page doesn't exist - stop
+                    // If we got 0 results, LinkedIn has no more pages
                     if (pageResults.length === 0) {
-                        console.log(`[LinkedIn Scraper] No results on page ${currentPageNum}, stopping pagination`);
+                        console.log(`[LinkedIn Scraper] No results on page ${currentPageNum}, LinkedIn exhausted`);
                         break;
                     }
 
+                    // Filter this page's results for uniqueness
+                    const uniqueFromThisPage = pageResults.filter(profile =>
+                        !profileHistoryService.hasViewedProfile(profile.id, viewedProfileIds) &&
+                        !uniqueProfiles.some(existing => existing.id === profile.id) // Also check against already collected unique
+                    );
+
+                    uniqueProfiles = [...uniqueProfiles, ...uniqueFromThisPage];
+                    console.log(`[LinkedIn Scraper] Page ${currentPageNum}: ${uniqueFromThisPage.length} unique, total unique: ${uniqueProfiles.length}/${targetUniqueCount}`);
+
                 } catch (paginationError: any) {
-                    console.error(`[LinkedIn Scraper] Error navigating to page ${currentPageNum}: `, paginationError.message);
+                    console.error(`[LinkedIn Scraper] Error on page ${currentPageNum}:`, paginationError.message);
                     break;
                 }
             }
 
-            console.log(`[LinkedIn Scraper] Total results from ${currentPageNum} page(s): ${allResults.length} `);
+            const totalFetched = allFetchedResults.length;
+            const duplicatesFiltered = totalFetched - uniqueProfiles.length;
+            console.log(`[LinkedIn Scraper] Summary: Fetched ${totalFetched} profiles across ${currentPageNum} pages, ${uniqueProfiles.length} unique, ${duplicatesFiltered} duplicates filtered`);
+
+            // Save new profiles to history
+            if (uniqueProfiles.length > 0) {
+                await profileHistoryService.saveBatch(userId, uniqueProfiles, filters);
+                console.log(`[LinkedIn Scraper] Saved ${uniqueProfiles.length} profiles to history`);
+            }
 
             // Keep browser open for a moment
             await new Promise(resolve => setTimeout(resolve, 2000));
 
             await this.cleanup();
 
-            // Return SearchResponse format with all results
+            // Return SearchResponse format with deduplicated results
             return {
-                results: allResults,
+                results: uniqueProfiles,
                 pagination: {
                     page: 1,
-                    limit: allResults.length,
-                    total: allResults.length,
-                    hasMore: currentPageNum >= maxPages
+                    limit: uniqueProfiles.length,
+                    total: uniqueProfiles.length,
+                    hasMore: currentPageNum >= maxPages && uniqueProfiles.length > 0
                 },
-                message: allResults.length === 0 ? "No profiles found. Try broader search terms or different location." :
-                    allResults.length < 10 ? `Found ${allResults.length} profile(s).LinkedIn may have limited results for this search.` : undefined
+                message: uniqueProfiles.length === 0 && totalFetched > 0
+                    ? `All ${totalFetched} profiles have been viewed previously. Try different search criteria.`
+                    : uniqueProfiles.length === 0
+                        ? "No profiles found. Try broader search terms or different location."
+                        : duplicatesFiltered > 0
+                            ? `Found ${uniqueProfiles.length} new profile(s). ${duplicatesFiltered} duplicate(s) filtered.`
+                            : undefined
             };
 
         } catch (error: any) {
