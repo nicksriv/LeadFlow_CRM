@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Calendar, Users, Search as SearchIcon, Loader2, ExternalLink, Briefcase, MapPin, Sparkles } from "lucide-react";
+import { Calendar, Users, Search as SearchIcon, Loader2, ExternalLink, Briefcase, MapPin, Sparkles, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface SearchCriteria {
     jobTitle?: string;
@@ -53,6 +53,11 @@ export function HistoryTab({ onAnalyzeProfile, isAnalyzing = false }: HistoryTab
     const [appliedStartDate, setAppliedStartDate] = useState("");
     const [appliedEndDate, setAppliedEndDate] = useState("");
 
+    // Search and pagination state
+    const [searchQuery, setSearchQuery] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const PROFILES_PER_PAGE = 20;
+
     // Fetch history stats
     const { data: stats, isLoading: statsLoading } = useQuery<HistoryStats>({
         queryKey: ["/api/linkedin/history/stats"],
@@ -89,6 +94,33 @@ export function HistoryTab({ onAnalyzeProfile, isAnalyzing = false }: HistoryTab
         setAppliedStartDate("");
         setAppliedEndDate("");
     };
+
+    const handleSearchChange = (value: string) => {
+        setSearchQuery(value);
+        setCurrentPage(1); // Reset to first page on search
+    };
+
+    // Filter all profiles across all groups by search query
+    const filteredHistory = groupedHistory?.map(group => ({
+        ...group,
+        profiles: group.profiles.filter(profile => {
+            if (!searchQuery) return true;
+            const query = searchQuery.toLowerCase();
+            return (
+                profile.name.toLowerCase().includes(query) ||
+                profile.headline?.toLowerCase().includes(query) ||
+                profile.location?.toLowerCase().includes(query)
+            );
+        })
+    })).filter(group => group.profiles.length > 0) || [];
+
+    // Calculate total profiles for pagination info 
+    const totalProfiles = filteredHistory.reduce((sum, group) => sum + group.profiles.length, 0);
+    const totalPages = Math.ceil(filteredHistory.length / PROFILES_PER_PAGE);
+
+    // Paginate groups
+    const startIndex = (currentPage - 1) * PROFILES_PER_PAGE;
+    const paginatedHistory = filteredHistory.slice(startIndex, startIndex + PROFILES_PER_PAGE);
 
     return (
         <div className="space-y-6">
@@ -175,13 +207,46 @@ export function HistoryTab({ onAnalyzeProfile, isAnalyzing = false }: HistoryTab
                 </CardContent>
             </Card>
 
+            {/* Search Input */}
+            <Card>
+                <CardContent className="pt-6">
+                    <div className="relative">
+                        <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="text"
+                            placeholder="Search profiles by name, headline, or location..."
+                            value={searchQuery}
+                            onChange={(e) => handleSearchChange(e.target.value)}
+                            className="pl-10 pr-10"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => handleSearchChange("")}
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* Grouped History */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-lg">Search History</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        All profiles you've viewed, grouped by search criteria
-                    </p>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-lg">Search History</CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                All profiles you've viewed, grouped by search criteria
+                            </p>
+                        </div>
+                        {searchQuery && (
+                            <div className="text-sm text-muted-foreground">
+                                {totalProfiles} profile{totalProfiles !== 1 ? 's' : ''} found
+                            </div>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {historyLoading ? (
@@ -191,14 +256,23 @@ export function HistoryTab({ onAnalyzeProfile, isAnalyzing = false }: HistoryTab
                     ) : !groupedHistory || groupedHistory.length === 0 ? (
                         <div className="text-center py-12 text-muted-foreground">
                             <SearchIcon className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                            <p>No search history found.</p>
-                            {(startDate || endDate) && (
-                                <p className="text-sm mt-2">Try adjusting your date range filters.</p>
+                            {searchQuery ? (
+                                <>
+                                    <p>No profiles found matching "{searchQuery}"</p>
+                                    <p className="text-sm mt-2">Try adjusting your search or filters.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p>No search history found.</p>
+                                    {(startDate || endDate) && (
+                                        <p className="text-sm mt-2">Try adjusting your date range filters.</p>
+                                    )}
+                                </>
                             )}
                         </div>
                     ) : (
                         <Accordion type="single" collapsible className="w-full">
-                            {groupedHistory.map((group, index) => (
+                            {paginatedHistory.map((group, index) => (
                                 <AccordionItem key={index} value={`item-${index}`}>
                                     <AccordionTrigger className="hover:no-underline">
                                         <div className="flex items-center justify-between w-full pr-4">
@@ -316,6 +390,35 @@ export function HistoryTab({ onAnalyzeProfile, isAnalyzing = false }: HistoryTab
                                 </AccordionItem>
                             ))}
                         </Accordion>
+                    )}
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                            <div className="text-sm text-muted-foreground">
+                                Page {currentPage} of {totalPages} ({filteredHistory.length} search group{filteredHistory.length !== 1 ? 's' : ''}, {totalProfiles} profile{totalProfiles !== 1 ? 's' : ''})
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    <ChevronLeft className="h-4 w-4 mr-1" />
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    Next
+                                    <ChevronRight className="h-4 w-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
                     )}
                 </CardContent>
             </Card>
