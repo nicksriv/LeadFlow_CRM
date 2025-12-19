@@ -1,7 +1,7 @@
-import OpenAI from "openai";
+import { bedrock } from "./services/bedrock.js";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Using AWS Bedrock Claude 3.5 Sonnet with cross-region inference profile
+const MODEL = "us.anthropic.claude-3-5-sonnet-20240620-v1:0";
 
 export interface LeadScoreAnalysis {
   score: number;
@@ -84,8 +84,8 @@ export async function analyzeLeadConversations(
     .join("\n---\n");
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
+    const response = await bedrock.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -126,7 +126,7 @@ Provide a comprehensive lead score analysis.`,
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 1024,
+      max_tokens: 1024,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -194,8 +194,8 @@ export async function summarizeConversations(
     .join("\n---\n");
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
+    const response = await bedrock.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -223,7 +223,7 @@ Respond with JSON in this exact format:
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 1024,
+      max_tokens: 1024,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -265,8 +265,8 @@ export async function draftEmailResponse(
   };
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
+    const response = await bedrock.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -296,7 +296,7 @@ Task: ${prompts[responseType]}`,
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 1024,
+      max_tokens: 1024,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -341,8 +341,8 @@ export async function analyzeSentimentTimeline(
       })
       .join("\n");
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
+    const response = await bedrock.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -367,7 +367,7 @@ Respond with JSON array:
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 2048,
+      max_tokens: 2048,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -454,8 +454,8 @@ export async function generateNextBestAction(
     .join(", ");
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
+    const response = await bedrock.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -504,7 +504,7 @@ What should we do next?`,
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 1024,
+      max_tokens: 1024,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
@@ -551,8 +551,8 @@ export async function predictDealOutcome(
   }
 ): Promise<DealForecast> {
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
+    const response = await bedrock.chat.completions.create({
+      model: MODEL,
       messages: [
         {
           role: "system",
@@ -610,7 +610,7 @@ Provide win/loss prediction with analysis.`,
         },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 1536,
+      max_tokens: 1536,
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");

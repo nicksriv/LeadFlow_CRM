@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { storage } from "../storage.js";
-import OpenAI from "openai";
+import { bedrock } from "../services/bedrock.js";
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { LinkedApiService } from "../services/linkedapi.js";
@@ -18,10 +18,7 @@ const router = Router();
 // Protect all LinkedIn routes with authentication
 router.use(AuthService.requireAuth);
 
-// Initialize OpenAI
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || "dummy",
-});
+const BEDROCK_MODEL = "us.anthropic.claude-3-5-sonnet-20240620-v1:0";
 
 // Helper to launch browser and set cookie
 async function getAuthenticatedPage(cookie: string) {
@@ -285,8 +282,8 @@ router.post("/generate-email", async (req, res) => {
             return res.status(400).json({ message: "Profile data is required" });
         }
 
-        // Simulate AI generation if no API key or dummy key
-        if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.startsWith("dummy")) {
+        // Simulate AI generation if no AWS credentials
+        if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
             await new Promise((resolve) => setTimeout(resolve, 2000));
             return res.json({
                 subject: `Partnership opportunity for ${profile.headline.split(" at ")[1] || "your company"}`,
@@ -294,7 +291,7 @@ router.post("/generate-email", async (req, res) => {
             });
         }
 
-        const completion = await openai.chat.completions.create({
+        const completion = await bedrock.chat.completions.create({
             messages: [
                 {
                     role: "system",
@@ -314,7 +311,7 @@ router.post("/generate-email", async (req, res) => {
           `,
                 },
             ],
-            model: "gpt-4o",
+            model: BEDROCK_MODEL,
             response_format: { type: "json_object" },
         });
 
